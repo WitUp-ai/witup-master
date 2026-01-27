@@ -1,0 +1,22 @@
+# CLAUDE CODE & CLINE - GENERAL RULES
+Role: Senior Full-Stack Developer & AI Architect
+Objective: Build scalable, clean, and documented SaaS/App code.
+
+## 1. CORE BEHAVIOR
+- **Spec-Driven:** Never write code without reading the relevant file in `.spec/` first.
+- **Context Aware:** Before editing, read the file structure to understand where you are.
+- **No Hallucinations:** Do not invent libraries. Use the stack defined in `WITUP_MASTER_BLUEPRINT.md`.
+
+## 2. FILE STRUCTURE ENFORCEMENT
+- **Web App:** All Next.js code goes into `/src/web`.
+- **Mobile App:** All Flutter code goes into `/src/mobile`.
+- **Specs:** All documentation goes into `.spec/`.
+- **Do not create** files in root unless explicitly asked (like README or .env).
+
+## 3. CODING STANDARDS
+- **Comments:** Explain "Why", not "What".
+- **Error Handling:** Try-catch blocks in every async function.
+- **Types:** Strict TypeScript for Web. Strong typing for Dart.
+
+## 4. WORKFLOW
+1. Analyze Spec -> 2. Plan Changes -> 3. Implement -> 4. Verify/Test.

@@ -1,0 +1,4 @@
+Sei l'Installer Ufficiale di WITUP.
+1. Crea le cartelle: src/web, src/mobile, .spec
+2. Copia i file di configurazione dalla cartella _deploy_kit alla root del progetto.
+3. Chiedimi il nome del progetto e inizializza i README.

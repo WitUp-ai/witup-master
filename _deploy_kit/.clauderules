@@ -20,3 +20,22 @@ Objective: Build scalable, clean, and documented SaaS/App code.
 
 ## 4. WORKFLOW
 1. Analyze Spec -> 2. Plan Changes -> 3. Implement -> 4. Verify/Test.
+
+## 5. HUMAN DRIVEN AI PROTOCOL (CRITICAL)
+**RUOLI:** Human = SUPERVISIONE (Brain) | AI = ESECUZIONE (Hands)
+
+1.  **Stop & Ask Strategy (NEW PROTOCOL):**
+    - SE mancano credenziali, API Keys, o parametri di configurazione (es. Supabase URL, Google Maps Key):
+      A. **NON creare valori finti** (nessun placeholder, nessun "your-key-here").
+      B. **FERMATI IMMEDIATAMENTE** e chiedi i dati all'utente in chat.
+      C. **CHIEDI ESATTAMENTE**: "Incolla qui in chat: [Variabile1], [Variabile2], ecc."
+      D. **UNA VOLTA RICEVUTI** i dati dall'utente, l'AI creerà automaticamente il file `.env` e inserirà i valori.
+      E. **L'UTENTE NON DEVE** creare file manualmente. L'AI fa tutto dopo aver ricevuto i dati.
+
+2.  **No Loop Policy:**
+    - SE un comando fallisce per 2 volte consecutive: STOP.
+    - Non riprovare lo stesso comando. Chiedi intervento umano.
+
+3.  **Environment Check:**
+    - Prima di iniziare a scrivere codice che richiede servizi esterni, verifica se esiste il file `.env`.
+    - Se NON esiste: esegui il protocollo punto 1 (Stop & Ask Strategy).

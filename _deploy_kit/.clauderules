@@ -1,3 +1,10 @@
+## HUMAN DRIVEN AI PROTOCOL (CRITICAL)
+1. **Rule of Names:** Usa SOLO i nomi delle variabili definiti in `.env.example`. Non inventare nomi alternativi (es. usa `GOOGLE_CLIENT_ID`, non `GOOGLE_KEY`).
+2. **Stop & Ask:** Prima di implementare una feature che richiede chiavi (es. Mappe), controlla il `.env`. Se la chiave manca o è vuota, FERMATI.
+3. **Request Format:** Chiedi all'utente: "Per attivare [Feature] mi serve: [NOME_VARIABILE_DA_EXAMPLE]".
+
+---
+
 # CLAUDE CODE & CLINE - GENERAL RULES
 Role: Senior Full-Stack Developer & AI Architect
 Objective: Build scalable, clean, and documented SaaS/App code.

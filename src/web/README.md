@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Applicazione Web - MadeMyToys
 
-## Getting Started
+Questa cartella contiene il codice sorgente per l'applicazione web frontend del progetto MadeMyToys.
 
-First, run the development server:
+## Tecnologie consigliate
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- React / Vue.js / Angular per il frontend
+- TypeScript per tipizzazione statica
+- Sass/Less per gli stili
+- Webpack / Vite per il bundling
+
+## Struttura consigliata
+
+```
+src/web/
+├── public/           # Asset statici
+├── src/
+│   ├── components/   # Componenti UI
+│   ├── pages/        # Pagine dell'applicazione
+│   ├── services/     # Servizi API
+│   ├── styles/       # Stili globali
+│   ├── utils/        # Utility functions
+│   └── App.jsx       # Componente principale
+├── package.json      # Dipendenze e script
+└── README.md         # Questo file
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Script di sviluppo
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Installare le dipendenze
+npm install
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Avviare il server di sviluppo
+npm run dev
 
-## Learn More
+# Build per produzione
+npm run build
 
-To learn more about Next.js, take a look at the following resources:
+# Eseguire i test
+npm test
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Configurazione
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Consulta i file in `../.spec/templates/ux/` per template e regole di design specifiche per WITUP.

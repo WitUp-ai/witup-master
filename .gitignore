@@ -1,114 +1,46 @@
-# Environment Variables
+# Environment & Secrets
 .env
-.env.local
-.env.development
-.env.production
-.env.test
+.env.*
+!.env.example
 
-# Dependencies
+# Node
 node_modules/
-.pnp
-.pnp.js
-.pub-cache/
-pubspec.lock
+npm-debug.log*
 
-# Build Outputs
-dist/
-build/
-.next/
-out/
-.vercel
-.flutter-plugins
-.flutter-plugins-dependencies
-.dart_tool/
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+supabase/.gitignore
 
-# Testing
-coverage/
-*.lcov
-.nyc_output
+# Supabase CLI binary
+supabase.exe
+
+# Supabase local data (but keep functions/)
+/supabase/.temp/
+/supabase/.branches/
+!/supabase/functions/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+nul
 
 # IDE
 .vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
-*~
-.project
-.classpath
-.settings/
-.loadpath
 
-# OS Files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Desktop.ini
+# Flutter build artifacts
+src/mobile/build/
+src/mobile/.dart_tool/
+src/mobile/.packages
 
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-pnpm-debug.log*
+# Claude
+.claude/
 
-# Runtime
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Credentials & Secrets
-*.pem
-*.key
-*.p12
-*.pfx
-secrets/
-credentials.json
-
-# Cache
-.cache/
-.parcel-cache/
-.npm
-.eslintcache
-.stylelintcache
-
-# Temporary
-tmp/
-temp/
-*.tmp
-*.bak
-*.swp
-
-# Flutter/Dart specific
-.flutter-plugins-dependencies
-.packages
-.pub/
-ios/Pods/
-ios/.symlinks/
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
-.metadata
-
-# FlutterFlow exports (se necessario versionare)
-# mobile/flutterflow_export/
-
-# Generated files
-*.g.dart
-*.freezed.dart
-*.generated.dart
-
-# Supabase
-.supabase/
-
-# MCP Server (development only)
-mcp-server-*.log
+# Python
+__pycache__/
+*.pyc
+venv/

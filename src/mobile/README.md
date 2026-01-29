@@ -1,16 +1,60 @@
-# mobile_app
+# Applicazione Mobile - MadeMyToys
 
-A new Flutter project.
+Questa cartella contiene il codice sorgente per l'applicazione mobile del progetto MadeMyToys.
 
-## Getting Started
+## Piattaforme supportate
 
-This project is a starting point for a Flutter application.
+- iOS
+- Android
+- PWA (Progressive Web App)
 
-A few resources to get you started if this is your first Flutter project:
+## Tecnologie consigliate
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- React Native per sviluppo cross-platform
+- Flutter per UI nativa
+- Expo per sviluppo rapido
+- TypeScript per tipizzazione statica
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Struttura consigliata
+
+```
+src/mobile/
+├── android/          # Codice nativo Android
+├── ios/              # Codice nativo iOS
+├── src/
+│   ├── components/   # Componenti UI
+│   ├── screens/      # Schermate dell'app
+│   ├── navigation/   # Gestione navigazione
+│   ├── services/     # Servizi API
+│   ├── store/        # State management
+│   ├── utils/        # Utility functions
+│   └── App.jsx       # Componente principale
+├── package.json      # Dipendenze e script
+└── README.md         # Questo file
+```
+
+## Script di sviluppo
+
+```bash
+# Installare le dipendenze
+npm install
+
+# Avviare l'app su iOS
+npm run ios
+
+# Avviare l'app su Android
+npm run android
+
+# Avviare Expo
+npm start
+
+# Build per produzione
+npm run build:android
+npm run build:ios
+```
+
+## Configurazione
+
+Consulta i file in `../.spec/templates/ux/` per template e regole di design specifiche per WITUP.
+
+Per configurazioni specifiche per mobile, crea file di configurazione nella cartella `.spec/templates/mobile/`.

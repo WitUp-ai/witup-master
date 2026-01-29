@@ -1,8 +1,3 @@
-## HUMAN DRIVEN AI PROTOCOL (CRITICAL)
-1. **Rule of Names:** Usa SOLO i nomi delle variabili definiti in `.env.example`. Non inventare nomi alternativi (es. usa `GOOGLE_CLIENT_ID`, non `GOOGLE_KEY`).
-2. **Stop & Ask:** Prima di implementare una feature che richiede chiavi (es. Mappe), controlla il `.env`. Se la chiave manca o è vuota, FERMATI.
-3. **Request Format:** Chiedi all'utente: "Per attivare [Feature] mi serve: [NOME_VARIABILE_DA_EXAMPLE]".
-
 # CLAUDE CODE & CLINE - GENERAL RULES
 Role: Senior Full-Stack Developer & AI Architect
 Objective: Build scalable, clean, and documented SaaS/App code.
@@ -25,3 +20,16 @@ Objective: Build scalable, clean, and documented SaaS/App code.
 
 ## 4. WORKFLOW
 1. Analyze Spec -> 2. Plan Changes -> 3. Implement -> 4. Verify/Test.
+
+## 5. HUMAN DRIVEN AI PROTOCOL (CRITICAL)
+1.  **Stop & Ask Strategy:**
+    - SE mancano credenziali, API Keys, o parametri di configurazione (es. Supabase URL, Google Maps Key): NON provare a generarle, NON provare a creare account, e NON usare valori fittizi.
+    - FERMATI IMMEDIATAMENTE.
+    - Chiedi all'utente: "Mancano le credenziali per [Servizio]. Per favore forniscimi [Variabile1] e [Variabile2] oppure crea tu il file .env."
+
+2.  **No Loop Policy:**
+    - SE un comando fallisce per 2 volte consecutive: STOP.
+    - Non riprovare lo stesso comando. Chiedi intervento umano.
+
+3.  **Environment Check:**
+    - Prima di iniziare a scrivere codice che richiede servizi esterni, verifica se esiste il file `.env`. Se non esiste, chiedi di crearlo.

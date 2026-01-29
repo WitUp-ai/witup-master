@@ -1,0 +1,190 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/debug_log_service.dart';
+
+/// Camera state
+class CameraState {
+  final bool isUploading;
+  final String? lastUploadedUrl;
+  final String? lastDrawingId;
+  final String? error;
+  final double uploadProgress;
+
+  const CameraState({
+    this.isUploading = false,
+    this.lastUploadedUrl,
+    this.lastDrawingId,
+    this.error,
+    this.uploadProgress = 0,
+  });
+
+  CameraState copyWith({
+    bool? isUploading,
+    String? lastUploadedUrl,
+    String? lastDrawingId,
+    String? error,
+    double? uploadProgress,
+  }) {
+    return CameraState(
+      isUploading: isUploading ?? this.isUploading,
+      lastUploadedUrl: lastUploadedUrl ?? this.lastUploadedUrl,
+      lastDrawingId: lastDrawingId ?? this.lastDrawingId,
+      error: error,
+      uploadProgress: uploadProgress ?? this.uploadProgress,
+    );
+  }
+}
+
+/// Camera provider for handling image capture and upload
+final cameraProvider = StateNotifierProvider<CameraNotifier, CameraState>((ref) {
+  return CameraNotifier(ref);
+});
+
+class CameraNotifier extends StateNotifier<CameraState> {
+  final Ref _ref;
+  final _uuid = const Uuid();
+
+  CameraNotifier(this._ref) : super(const CameraState());
+
+  SupabaseClient get _supabase => Supabase.instance.client;
+
+  final _debug = DebugLogService.instance;
+
+  /// Upload a drawing image to Supabase Storage
+  Future<String> uploadDrawing(XFile imageFile, Uint8List imageBytes) async {
+    try {
+      _debug.log('Upload', 'Starting upload: ${imageFile.name} (${(imageBytes.length / 1024).toStringAsFixed(1)} KB)');
+      state = state.copyWith(isUploading: true, error: null, uploadProgress: 0);
+
+      // Get current user - must be authenticated
+      final authState = _ref.read(authProvider);
+      final userId = authState.user?.id;
+
+      if (userId == null) {
+        throw Exception('You must be logged in to upload drawings');
+      }
+
+      // Generate unique filename
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final uniqueId = _uuid.v4().substring(0, 8);
+      final extension = imageFile.name.split('.').last.toLowerCase();
+      final fileName = 'drawing_${timestamp}_$uniqueId.$extension';
+      // Path: {user_id}/{filename} - matches RLS policy
+      final storagePath = '$userId/$fileName';
+
+      state = state.copyWith(uploadProgress: 0.3);
+
+      // Upload to Supabase Storage (drawings-original bucket - private)
+      await _supabase.storage
+          .from('drawings-original')
+          .uploadBinary(
+            storagePath,
+            imageBytes,
+            fileOptions: FileOptions(
+              contentType: 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+              upsert: true,
+            ),
+          );
+
+      _debug.success('Upload', 'Storage upload complete: $storagePath');
+      state = state.copyWith(uploadProgress: 0.7);
+
+      // Get signed URL for private bucket (valid for 1 hour)
+      final signedUrl = await _supabase.storage
+          .from('drawings-original')
+          .createSignedUrl(storagePath, 3600);
+
+      // Storage path is the URL reference for database
+      final publicUrl = signedUrl;
+
+      _debug.success('Upload', 'Signed URL created');
+      state = state.copyWith(uploadProgress: 0.9);
+
+      // Save drawing record to database and get the ID
+      final drawingId = await _saveDrawingRecord(
+        userId: userId,
+        storagePath: storagePath,
+        publicUrl: publicUrl,
+        fileName: fileName,
+      );
+
+      _debug.success('Upload', 'Drawing record saved, ID: $drawingId');
+
+      state = state.copyWith(
+        isUploading: false,
+        lastUploadedUrl: publicUrl,
+        lastDrawingId: drawingId,
+        uploadProgress: 1.0,
+      );
+
+      return publicUrl;
+    } catch (e) {
+      _debug.error('Upload', 'Upload failed', error: e);
+      state = state.copyWith(
+        isUploading: false,
+        error: e.toString(),
+        uploadProgress: 0,
+      );
+      rethrow;
+    }
+  }
+
+  /// Save drawing record to database (matches .spec/database-schema.sql)
+  /// Returns the drawing ID if successful, null otherwise
+  Future<String?> _saveDrawingRecord({
+    required String userId,
+    required String storagePath,
+    required String publicUrl,
+    required String fileName,
+  }) async {
+    try {
+      final response = await _supabase.from('drawings').insert({
+        'user_id': userId,
+        'original_image_url': storagePath, // Storage path in drawings-original bucket
+        'title': 'Drawing ${DateTime.now().toString().substring(0, 10)}',
+        'model_status': 'pending',
+        // created_at and updated_at are auto-generated by database triggers
+      }).select('id').single();
+
+      return response['id'] as String?;
+    } catch (e) {
+      // Log error but don't fail the upload
+      // The storage upload was successful
+      debugPrint('Warning: Could not save drawing record: $e');
+      return null;
+    }
+  }
+
+  /// Get the last uploaded drawing ID
+  String? get lastDrawingId => state.lastDrawingId;
+
+  /// Reset state
+  void reset() {
+    state = const CameraState();
+  }
+}
+
+/// Provider for recent drawings
+final recentDrawingsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final authState = ref.watch(authProvider);
+  final userId = authState.user?.id;
+
+  if (userId == null) return [];
+
+  try {
+    final response = await Supabase.instance.client
+        .from('drawings')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(20);
+
+    return List<Map<String, dynamic>>.from(response);
+  } catch (e) {
+    return [];
+  }
+});

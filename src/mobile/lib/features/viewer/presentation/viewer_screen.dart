@@ -303,9 +303,11 @@ class ViewerScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            child: const Text(
-              '2D Preview - 3D model not yet available',
-              style: TextStyle(color: Colors.white, fontSize: 12),
+            child: Text(
+              status == 'processing_3d'
+                  ? '2D Preview - 3D model is being generated...'
+                  : '2D Preview - 3D model not yet available',
+              style: const TextStyle(color: Colors.white, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ),
@@ -326,8 +328,9 @@ class ViewerScreen extends ConsumerWidget {
         icon = Icons.check_circle;
         break;
       case 'processing':
+      case 'processing_3d':
         color = AppTheme.accentColor;
-        text = 'Processing';
+        text = status == 'processing_3d' ? 'Generating 3D...' : 'Processing';
         icon = Icons.hourglass_empty;
         break;
       case 'failed':

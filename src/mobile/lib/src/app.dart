@@ -1,24 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'screens/ux_test_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/theme/app_theme.dart';
+import '../core/router/app_router.dart';
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class Draw2ToyApp extends ConsumerWidget {
+  const Draw2ToyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'WITUP Mobile Engine',
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
+      title: 'Draw2Toy',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1), // Indigo primary
-          brightness: Brightness.light,
-        ),
-        textTheme: GoogleFonts.interTextTheme(),
-        useMaterial3: true,
-      ),
-      home: const UxTestScreen(),
+      theme: AppTheme.lightTheme,
+      routerConfig: router,
     );
   }
 }

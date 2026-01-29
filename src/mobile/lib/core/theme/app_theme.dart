@@ -54,7 +54,7 @@ class AppTheme {
   // Shadows
   static List<BoxShadow> get shadowSmall => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha:0.05),
           blurRadius: 8,
           offset: const Offset(0, 2),
         ),
@@ -62,7 +62,7 @@ class AppTheme {
 
   static List<BoxShadow> get shadowMedium => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.08),
+          color: Colors.black.withValues(alpha:0.08),
           blurRadius: 16,
           offset: const Offset(0, 4),
         ),
@@ -70,7 +70,7 @@ class AppTheme {
 
   static List<BoxShadow> get shadowLarge => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.12),
+          color: Colors.black.withValues(alpha:0.12),
           blurRadius: 24,
           offset: const Offset(0, 8),
         ),
@@ -112,17 +112,19 @@ class AppTheme {
 
       // Card Theme
       cardTheme: CardThemeData(
-        elevation: 2,
+        elevation: 4,
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radiusMedium),
+          borderRadius: BorderRadius.circular(radiusLarge),
         ),
         color: cardColor,
+        surfaceTintColor: Colors.transparent,
       ),
 
       // Elevated Button
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          elevation: 0,
+          elevation: 2,
           padding: const EdgeInsets.symmetric(horizontal: spaceL, vertical: spaceM),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusMedium),
@@ -173,11 +175,11 @@ class AppTheme {
         fillColor: surfaceColor,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
-          borderSide: BorderSide(color: textTertiary.withOpacity(0.3)),
+          borderSide: BorderSide(color: textTertiary.withValues(alpha:0.3)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
-          borderSide: BorderSide(color: textTertiary.withOpacity(0.3)),
+          borderSide: BorderSide(color: textTertiary.withValues(alpha:0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
@@ -273,7 +275,7 @@ class AppTheme {
 
       // Divider
       dividerTheme: DividerThemeData(
-        color: textTertiary.withOpacity(0.2),
+        color: textTertiary.withValues(alpha:0.2),
         thickness: 1,
         space: 1,
       ),

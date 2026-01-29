@@ -202,7 +202,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
     return Container(
       padding: const EdgeInsets.all(AppTheme.spaceM),
       decoration: BoxDecoration(
-        color: AppTheme.primaryColor.withOpacity(0.1),
+        color: AppTheme.primaryColor.withValues(alpha:0.1),
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
       ),
       child: Row(

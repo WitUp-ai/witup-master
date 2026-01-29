@@ -182,7 +182,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                       width: 150,
                       height: 150,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.2),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -215,7 +215,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                     Text(
                       'Take a photo of your drawing or select from gallery.\nMake sure the drawing is well-lit and clearly visible.',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 16,
                       ),
                       textAlign: TextAlign.center,
@@ -227,7 +227,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                     Container(
                       padding: const EdgeInsets.all(AppTheme.spaceM),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                       ),
                       child: Column(
@@ -275,12 +275,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: AppTheme.spaceM),
-                      const Text(
-                        'Camera not available on web browser',
+                      const SizedBox(height: AppTheme.spaceS),
+                      Text(
+                        'Choose a photo of your drawing from your device',
                         style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 13,
                         ),
                       ),
                     ],
@@ -320,7 +320,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         Text(
           text,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.white.withValues(alpha:0.9),
             fontSize: 14,
           ),
         ),
@@ -468,7 +468,7 @@ class _CaptureButton extends StatelessWidget {
             height: isPrimary ? 80 : 60,
             decoration: BoxDecoration(
               gradient: isPrimary ? AppTheme.magicGradient : null,
-              color: isPrimary ? null : Colors.white.withOpacity(0.2),
+              color: isPrimary ? null : Colors.white.withValues(alpha:0.2),
               shape: BoxShape.circle,
               border: Border.all(
                 color: Colors.white,
@@ -489,7 +489,7 @@ class _CaptureButton extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.white.withValues(alpha:0.9),
             fontSize: 14,
           ),
         ),

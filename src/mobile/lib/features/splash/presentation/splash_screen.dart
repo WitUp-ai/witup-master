@@ -73,7 +73,7 @@ class _SplashScreenState extends State<SplashScreen> {
               Text(
                 'Bring Your Drawings to Life ✨',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white.withOpacity(0.95),
+                  color: Colors.white.withValues(alpha:0.95),
                   fontSize: 18,
                 ),
               ),
@@ -85,10 +85,10 @@ class _SplashScreenState extends State<SplashScreen> {
                 padding: const EdgeInsets.all(24),
                 margin: const EdgeInsets.symmetric(horizontal: 40),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha:0.15),
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
+                    color: Colors.white.withValues(alpha:0.3),
                     width: 2,
                   ),
                 ),
@@ -106,7 +106,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       'Architecture: ✅ Complete\nSupabase: ✅ Connected\nFlutter: ✅ Running\nTheme: ✅ Child-Friendly',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha:0.9),
                         height: 1.6,
                       ),
                     ),
@@ -127,7 +127,7 @@ class _SplashScreenState extends State<SplashScreen> {
               Text(
                 'Ready for next features...',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha:0.8),
                 ),
               ),
             ],

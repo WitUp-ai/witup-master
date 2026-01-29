@@ -19,63 +19,66 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = const [
-    _HomeTab(),
-    _GalleryTab(),
-    _ProfileTab(),
+  late final List<Widget> _pages = [
+    _HomeTab(onSwitchTab: (i) => setState(() { _selectedIndex = i; })),
+    const _GalleryTab(),
+    const _ProfileTab(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: _pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.photo_library_outlined),
-            activeIcon: Icon(Icons.photo_library),
-            label: 'Gallery',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          selectedItemColor: AppTheme.primaryColor,
+          unselectedItemColor: AppTheme.textTertiary,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.photo_library_outlined),
+              activeIcon: Icon(Icons.photo_library),
+              label: 'Gallery',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
-      floatingActionButton: _selectedIndex == 0 || _selectedIndex == 1
-          ? FloatingActionButton.large(
-              onPressed: () {
-                context.push('/camera');
-              },
-              child: const Icon(Icons.camera_alt, size: 32),
-            )
-                .animate()
-                .scale(
-                  duration: 600.ms,
-                  curve: Curves.elasticOut,
-                )
-                .fadeIn()
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
 
 /// Home Tab - Main creative hub
 class _HomeTab extends ConsumerWidget {
-  const _HomeTab();
+  final void Function(int) onSwitchTab;
+  const _HomeTab({required this.onSwitchTab});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -161,7 +164,7 @@ class _HomeTab extends ConsumerWidget {
                   Text(
                     'Draw on paper, snap a photo, and watch your creation transform into a 3D toy in seconds! ✨',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           height: 1.5,
                         ),
                   ),
@@ -213,7 +216,7 @@ class _HomeTab extends ConsumerWidget {
                     icon: Icons.photo_library,
                     title: 'My Gallery',
                     color: AppTheme.accentColor,
-                    onTap: () {},
+                    onTap: () => onSwitchTab(1),
                   ).animate().scale(delay: 500.ms, duration: 400.ms).fadeIn(),
                 ),
                 const SizedBox(width: AppTheme.spaceM),
@@ -222,7 +225,11 @@ class _HomeTab extends ConsumerWidget {
                     icon: Icons.shopping_bag,
                     title: 'Orders',
                     color: AppTheme.warningColor,
-                    onTap: () {},
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Orders coming soon!')),
+                      );
+                    },
                   ).animate().scale(delay: 600.ms, duration: 400.ms).fadeIn(),
                 ),
               ],
@@ -237,7 +244,11 @@ class _HomeTab extends ConsumerWidget {
                     icon: Icons.view_in_ar,
                     title: 'AR Preview',
                     color: AppTheme.secondaryColor,
-                    onTap: () {},
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('AR Preview coming soon!')),
+                      );
+                    },
                   ).animate().scale(delay: 700.ms, duration: 400.ms).fadeIn(),
                 ),
                 const SizedBox(width: AppTheme.spaceM),
@@ -246,13 +257,17 @@ class _HomeTab extends ConsumerWidget {
                     icon: Icons.tips_and_updates,
                     title: 'Tips',
                     color: AppTheme.successColor,
-                    onTap: () {},
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Tips & Tutorials coming soon!')),
+                      );
+                    },
                   ).animate().scale(delay: 800.ms, duration: 400.ms).fadeIn(),
                 ),
               ],
             ),
 
-            const SizedBox(height: 100), // Space for FAB
+            const SizedBox(height: AppTheme.spaceL),
           ],
         ),
       ),
@@ -641,10 +656,10 @@ class _QuickActionCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppTheme.spaceM),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           border: Border.all(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             width: 2,
           ),
         ),

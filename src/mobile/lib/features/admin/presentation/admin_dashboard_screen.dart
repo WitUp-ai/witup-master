@@ -181,7 +181,7 @@ class _OverviewTab extends ConsumerWidget {
                           child: LinearProgressIndicator(
                             value: data.successRate / 100,
                             minHeight: 12,
-                            backgroundColor: AppTheme.textTertiary.withOpacity(0.2),
+                            backgroundColor: AppTheme.textTertiary.withValues(alpha:0.2),
                             valueColor: AlwaysStoppedAnimation(
                               data.successRate > 80
                                   ? AppTheme.successColor
@@ -377,7 +377,7 @@ class _DrawingsTab extends ConsumerWidget {
                 trailing: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _statusColor(status).withOpacity(0.1),
+                    color: _statusColor(status).withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -528,9 +528,9 @@ class _SystemConfigTab extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(AppTheme.spaceM),
                 decoration: BoxDecoration(
-                  color: AppTheme.infoColor.withOpacity(0.1),
+                  color: AppTheme.infoColor.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                  border: Border.all(color: AppTheme.infoColor.withOpacity(0.3)),
+                  border: Border.all(color: AppTheme.infoColor.withValues(alpha:0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1033,7 +1033,7 @@ class _ApiConfigCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(

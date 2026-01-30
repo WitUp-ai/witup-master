@@ -166,138 +166,144 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Widget _buildCaptureView() {
     return SafeArea(
-      child: Column(
-        children: [
-          // Instructions
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spaceL),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.draw,
-                        size: 80,
-                        color: AppTheme.primaryColor,
-                      ),
-                    )
-                        .animate(onPlay: (c) => c.repeat(reverse: true))
-                        .scale(
-                          begin: const Offset(1, 1),
-                          end: const Offset(1.1, 1.1),
-                          duration: 1500.ms,
-                        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceL),
+        child: Column(
+          children: [
+            const Spacer(flex: 2),
 
-                    const SizedBox(height: AppTheme.spaceXL),
+            // Icon
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.draw,
+                size: 52,
+                color: AppTheme.primaryColor,
+              ),
+            )
+                .animate(onPlay: (c) => c.repeat(reverse: true))
+                .scale(
+                  begin: const Offset(1, 1),
+                  end: const Offset(1.08, 1.08),
+                  duration: 1500.ms,
+                ),
 
-                    const Text(
-                      'Ready to capture your drawing!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+            const SizedBox(height: AppTheme.spaceL),
 
-                    const SizedBox(height: AppTheme.spaceM),
+            const Text(
+              'Cattura il tuo disegno!',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
 
-                    Text(
-                      'Take a photo of your drawing or select from gallery.\nMake sure the drawing is well-lit and clearly visible.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 16,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+            const SizedBox(height: AppTheme.spaceS),
 
-                    const SizedBox(height: AppTheme.space2XL),
+            Text(
+              'Scatta una foto o seleziona dalla galleria.\nAssicurati che il disegno sia ben illuminato.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 14,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
 
-                    // Tips
-                    Container(
-                      padding: const EdgeInsets.all(AppTheme.spaceM),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildTip(Icons.wb_sunny, 'Good lighting'),
-                          const SizedBox(height: AppTheme.spaceS),
-                          _buildTip(Icons.crop_square, 'Flat surface'),
-                          const SizedBox(height: AppTheme.spaceS),
-                          _buildTip(Icons.visibility, 'Clear lines'),
-                        ],
-                      ),
-                    )
-                        .animate()
-                        .fadeIn(delay: 500.ms)
-                        .slideY(begin: 0.2),
-                  ],
+            const SizedBox(height: AppTheme.spaceL),
+
+            // Tips - compact horizontal row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildChip(Icons.wb_sunny, 'Luce'),
+                const SizedBox(width: 10),
+                _buildChip(Icons.crop_square, 'Piano'),
+                const SizedBox(width: 10),
+                _buildChip(Icons.visibility, 'Nitido'),
+              ],
+            )
+                .animate()
+                .fadeIn(delay: 400.ms),
+
+            const Spacer(flex: 3),
+
+            // Action buttons
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton.icon(
+                onPressed: _captureFromCamera,
+                icon: const Icon(Icons.camera_alt, size: 22),
+                label: const Text(
+                  'Scatta Foto',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                  ),
+                  elevation: 4,
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: _pickFromGallery,
+                icon: const Icon(Icons.photo_library, size: 20),
+                label: const Text(
+                  'Carica da Galleria',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                  ),
+                ),
+              ),
+            ),
 
-          // Action buttons - always show both
-          Padding(
-            padding: const EdgeInsets.all(AppTheme.spaceL),
-            child: Column(
-              children: [
-                // Primary: Take Photo
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: _captureFromCamera,
-                    icon: const Icon(Icons.camera_alt, size: 24),
-                    label: const Text(
-                      'Scatta Foto',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                      ),
-                      elevation: 4,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppTheme.spaceM),
-                // Secondary: Upload from Gallery
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton.icon(
-                    onPressed: _pickFromGallery,
-                    icon: const Icon(Icons.photo_library, size: 22),
-                    label: const Text(
-                      'Carica da Galleria',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        width: 2,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            const SizedBox(height: AppTheme.spaceL),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppTheme.accentColor, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 13,
             ),
           ),
         ],
@@ -305,22 +311,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     );
   }
 
-  Widget _buildTip(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: AppTheme.accentColor, size: 20),
-        const SizedBox(width: AppTheme.spaceS),
-        Text(
-          text,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha:0.9),
-            fontSize: 14,
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildPreviewView() {
     return SafeArea(

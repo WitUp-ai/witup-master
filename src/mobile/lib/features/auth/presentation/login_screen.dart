@@ -315,8 +315,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         : () async {
                             try {
                               await ref.read(authProvider.notifier).signInWithEmail(
-                                    'demo@draw2toy.com',
-                                    'demodemo',
+                                    'demo@demo.it',
+                                    'demo00',
                                   );
                             } catch (e) {
                               if (mounted) {
@@ -331,7 +331,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           },
                     icon: const Icon(Icons.play_circle_outline, size: 20),
                     label: const Text(
-                      'Accesso Demo',
+                      'Accesso Demo (demo@demo.it / demo00)',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                     style: TextButton.styleFrom(

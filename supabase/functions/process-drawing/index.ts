@@ -38,11 +38,38 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
-    const removeBgApiKey = Deno.env.get("REMOVE_BG_API_KEY");
-    const rodinApiKey = Deno.env.get("RODIN_API_KEY");
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Load API keys: prefer Deno env, fallback to system_config table
+    let replicateToken = Deno.env.get("REPLICATE_API_TOKEN") || null;
+    let removeBgApiKey = Deno.env.get("REMOVE_BG_API_KEY") || null;
+    let rodinApiKey = Deno.env.get("RODIN_API_KEY") || null;
+
+    if (!replicateToken || !removeBgApiKey || !rodinApiKey) {
+      console.log("Some API keys missing from env, checking system_config table...");
+      const { data: configs } = await supabase
+        .from("system_config")
+        .select("key, value")
+        .in("key", ["REPLICATE_API_TOKEN", "REMOVE_BG_API_KEY", "RODIN_API_KEY"]);
+
+      if (configs) {
+        for (const cfg of configs) {
+          if (cfg.key === "REPLICATE_API_TOKEN" && !replicateToken) replicateToken = cfg.value;
+          if (cfg.key === "REMOVE_BG_API_KEY" && !removeBgApiKey) removeBgApiKey = cfg.value;
+          if (cfg.key === "RODIN_API_KEY" && !rodinApiKey) rodinApiKey = cfg.value;
+        }
+      }
+    }
+
+    if (!replicateToken) {
+      console.error("REPLICATE_API_TOKEN not found in env or system_config!");
+      return new Response(
+        JSON.stringify({ success: false, error: "api_config_missing", error_message: "REPLICATE_API_TOKEN not configured. Add it to system_config table or Edge Function secrets." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("API keys loaded. Replicate:", replicateToken ? "OK" : "MISSING");
 
     const { drawing_id, user_id, style = "cartoon", quality = "standard" }: ProcessRequest = await req.json();
 

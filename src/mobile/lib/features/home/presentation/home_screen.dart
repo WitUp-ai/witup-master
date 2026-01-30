@@ -375,7 +375,7 @@ class _GalleryTab extends ConsumerWidget {
                   if (drawings.isEmpty) {
                     return _buildEmptyGallery(context);
                   }
-                  return _buildDrawingsGrid(context, drawings);
+                  return _buildDrawingsGrid(context, drawings, ref);
                 },
               ),
             ),
@@ -422,7 +422,7 @@ class _GalleryTab extends ConsumerWidget {
     );
   }
 
-  Widget _buildDrawingsGrid(BuildContext context, List<Map<String, dynamic>> drawings) {
+  Widget _buildDrawingsGrid(BuildContext context, List<Map<String, dynamic>> drawings, WidgetRef ref) {
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -433,20 +433,79 @@ class _GalleryTab extends ConsumerWidget {
       itemCount: drawings.length,
       itemBuilder: (context, index) {
         final drawing = drawings[index];
-        return _DrawingCard(drawing: drawing)
+        return _DrawingCard(
+          drawing: drawing,
+          onDelete: () => _deleteDrawing(context, ref, drawing),
+        )
             .animate()
             .fadeIn(delay: Duration(milliseconds: index * 100))
             .scale(begin: const Offset(0.9, 0.9));
       },
     );
   }
+
+  Future<void> _deleteDrawing(BuildContext context, WidgetRef ref, Map<String, dynamic> drawing) async {
+    final id = drawing['id'] as String;
+    final title = drawing['title'] as String? ?? 'Untitled';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Elimina disegno'),
+        content: Text('Vuoi eliminare "$title"? Questa azione è irreversibile.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
+            child: const Text('Elimina'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Delete storage files (ignore errors)
+      final originalPath = drawing['original_image_url'] as String?;
+      if (originalPath != null) {
+        try { await supabase.storage.from('drawings-original').remove([originalPath]); } catch (_) {}
+      }
+      final processedUrl = drawing['processed_image_url'] as String?;
+      if (processedUrl != null && !processedUrl.startsWith('http')) {
+        try { await supabase.storage.from('drawings-processed').remove([processedUrl]); } catch (_) {}
+      }
+
+      // Delete DB record
+      await supabase.from('drawings').delete().eq('id', id);
+
+      // Refresh gallery
+      ref.invalidate(recentDrawingsProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Disegno eliminato'), backgroundColor: AppTheme.successColor),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: $e'), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    }
+  }
 }
 
 /// Card for a single drawing in the gallery
 class _DrawingCard extends StatelessWidget {
   final Map<String, dynamic> drawing;
+  final VoidCallback onDelete;
 
-  const _DrawingCard({required this.drawing});
+  const _DrawingCard({required this.drawing, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -513,33 +572,47 @@ class _DrawingCard extends StatelessWidget {
             ),
             // Info area
             Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        status[0].toUpperCase() + status.substring(1),
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(statusIcon, size: 14, color: statusColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              status[0].toUpperCase() + status.substring(1),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: onDelete,
+                    child: Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: Colors.grey.shade400,
+                    ),
                   ),
                 ],
               ),

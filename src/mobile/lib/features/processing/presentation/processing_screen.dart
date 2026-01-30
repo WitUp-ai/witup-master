@@ -4,13 +4,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/debug_overlay.dart';
 import '../../../core/services/debug_log_service.dart';
 import '../../ai/providers/ai_processing_provider.dart';
 import '../../ai/services/ai_processing_service.dart';
-import 'dart:async';
 
-/// Processing screen - shows AI processing progress and results
+/// Processing screen - shows real AI processing progress
 class ProcessingScreen extends ConsumerStatefulWidget {
   final String drawingId;
 
@@ -24,41 +22,45 @@ class ProcessingScreen extends ConsumerStatefulWidget {
 }
 
 class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
+  bool _pipelineStarted = false;
+  String? _pipelineError;
+
   @override
   void initState() {
     super.initState();
-    // Start processing when screen loads
     _startProcessing();
   }
 
   Future<void> _startProcessing() async {
-    final userId = _getUserId();
+    if (_pipelineStarted) return;
+    _pipelineStarted = true;
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
     DebugLogService.instance.clear();
     DebugLogService.instance.log('Pipeline', 'Start Creating pressed for drawing: ${widget.drawingId}');
 
-    if (userId != null) {
-      DebugLogService.instance.log('Pipeline', 'User authenticated: $userId');
-      try {
-        await ref.read(aiProcessingProvider.notifier).processDrawing(
-              drawingId: widget.drawingId,
-              userId: userId,
-            );
-      } catch (e) {
-        // Error is handled in the provider state
-      }
-    } else {
-      DebugLogService.instance.error('Pipeline', 'No authenticated user!');
+    if (userId == null) {
+      setState(() => _pipelineError = 'Utente non autenticato');
+      return;
     }
-  }
 
-  String? _getUserId() {
-    // Get user ID from Supabase auth
-    return Supabase.instance.client.auth.currentUser?.id;
+    try {
+      await ref.read(aiProcessingProvider.notifier).processDrawing(
+            drawingId: widget.drawingId,
+            userId: userId,
+          );
+    } catch (e) {
+      // Error will be reflected in the stream from DB status
+      DebugLogService.instance.error('Pipeline', 'Pipeline error: $e');
+      if (mounted) {
+        setState(() => _pipelineError = e.toString());
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final processingState = ref.watch(aiProcessingProvider);
+    // Watch the REAL status from Supabase Realtime
     final statusAsync = ref.watch(drawingStatusProvider(widget.drawingId));
 
     return Scaffold(
@@ -70,42 +72,58 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           icon: const Icon(Icons.close),
           onPressed: () => context.go('/home'),
         ),
-        title: const Text('Creating Magic'),
+        title: const Text('Creazione in Corso'),
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: statusAsync.when(
-                loading: () => _buildProcessingView(processingState),
-                error: (error, _) => _buildErrorView(error.toString()),
-                data: (status) {
-                  if (status.isCompleted) {
-                    return _buildCompletedView(status);
-                  } else if (status.isFailed) {
-                    return _buildErrorView(status.error ?? 'Processing failed');
-                  } else {
-                    return _buildProcessingView(processingState);
-                  }
-                },
-              ),
-            ),
-            const DebugOverlay(),
-          ],
+        child: statusAsync.when(
+          loading: () => _buildLoadingView(),
+          error: (error, _) => _buildErrorView(error.toString()),
+          data: (status) {
+            if (status.isCompleted) {
+              return _buildCompletedView(status);
+            } else if (status.isFailed) {
+              return _buildErrorView(status.error ?? _pipelineError ?? 'Elaborazione fallita');
+            } else {
+              // processing or processing_3d
+              return _buildProcessingView(status);
+            }
+          },
         ),
       ),
     );
   }
 
-  Widget _buildProcessingView(AIProcessingState state) {
+  Widget _buildLoadingView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(color: AppTheme.primaryColor),
+          const SizedBox(height: AppTheme.spaceL),
+          Text(
+            'Connessione in corso...',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcessingView(DrawingStatus status) {
+    final stepLabel = status.isProcessing3D
+        ? 'Generazione modello 3D...'
+        : 'Elaborazione disegno...';
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.spaceXL),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Animated magic wand icon
+            // Animated icon
             Container(
               width: 120,
               height: 120,
@@ -121,25 +139,12 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               ),
             )
                 .animate(onPlay: (c) => c.repeat())
-                .rotate(duration: 3.seconds)
-                .then()
-                .scale(
-                  begin: const Offset(1, 1),
-                  end: const Offset(1.1, 1.1),
-                  duration: 500.ms,
-                )
-                .then()
-                .scale(
-                  begin: const Offset(1.1, 1.1),
-                  end: const Offset(1, 1),
-                  duration: 500.ms,
-                ),
+                .rotate(duration: 3.seconds),
 
             const SizedBox(height: AppTheme.space2XL),
 
-            // Status text
             Text(
-              state.currentStep ?? 'Starting magic...',
+              stepLabel,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -150,77 +155,43 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
 
             const SizedBox(height: AppTheme.spaceL),
 
-            // Progress bar
-            Container(
-              width: double.infinity,
-              height: 8,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: state.progress,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.magicGradient,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-            ).animate().fadeIn(),
-
-            const SizedBox(height: AppTheme.spaceM),
-
-            Text(
-              '${(state.progress * 100).toInt()}%',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppTheme.primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
+            // Real indeterminate progress
+            const LinearProgressIndicator(
+              color: AppTheme.primaryColor,
+              backgroundColor: Color(0xFFE0E0E0),
             ),
 
             const SizedBox(height: AppTheme.space2XL),
 
-            // Fun facts while waiting
-            _buildFunFact(),
+            // Info box
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spaceM),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.lightbulb_outline, color: AppTheme.accentColor),
+                  const SizedBox(width: AppTheme.spaceM),
+                  Expanded(
+                    child: Text(
+                      status.isProcessing3D
+                          ? 'Il modello 3D potrebbe richiedere fino a 30 secondi...'
+                          : 'L\'AI sta analizzando il tuo disegno...',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(delay: 500.ms),
           ],
         ),
       ),
     );
-  }
-
-  Widget _buildFunFact() {
-    final facts = [
-      'Your drawing is being analyzed by AI...',
-      'Removing the background...',
-      'Finding the perfect 3D shape...',
-      'Adding magical touches...',
-      'Almost there!',
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spaceM),
-      decoration: BoxDecoration(
-        color: AppTheme.primaryColor.withValues(alpha:0.1),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.lightbulb_outline, color: AppTheme.accentColor),
-          const SizedBox(width: AppTheme.spaceM),
-          Expanded(
-            child: Text(
-              facts[DateTime.now().second % facts.length],
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(delay: 500.ms);
   }
 
   Widget _buildCompletedView(DrawingStatus status) {
@@ -228,7 +199,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
       padding: const EdgeInsets.all(AppTheme.spaceL),
       child: Column(
         children: [
-          // Success animation
+          const SizedBox(height: AppTheme.spaceXL),
+
+          // Success
           Container(
             width: 100,
             height: 100,
@@ -236,21 +209,15 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               color: AppTheme.successColor,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.check,
-              size: 60,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.check, size: 60, color: Colors.white),
           )
               .animate()
-              .scale(duration: 500.ms, curve: Curves.elasticOut)
-              .then()
-              .shake(duration: 500.ms),
+              .scale(duration: 500.ms, curve: Curves.elasticOut),
 
           const SizedBox(height: AppTheme.spaceL),
 
           Text(
-            'Magic Complete!',
+            'Elaborazione Completata!',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: AppTheme.successColor,
@@ -260,9 +227,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           const SizedBox(height: AppTheme.spaceXL),
 
           // Processed image preview
-          if (status.processedImageUrl != null) ...[
+          if (status.displayImageUrl != null) ...[
             const Text(
-              'Your processed drawing:',
+              'Il tuo disegno elaborato:',
               style: TextStyle(fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: AppTheme.spaceM),
@@ -273,7 +240,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.network(
-                status.processedImageUrl!,
+                status.displayImageUrl!,
                 height: 250,
                 fit: BoxFit.contain,
                 loadingBuilder: (context, child, progress) {
@@ -318,7 +285,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                       ? () => context.go('/viewer/${widget.drawingId}')
                       : null,
                   icon: const Icon(Icons.view_in_ar),
-                  label: const Text('View in AR'),
+                  label: const Text('Vedi in 3D'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
@@ -332,11 +299,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           if (status.model3dUrl == null) ...[
             const SizedBox(height: AppTheme.spaceM),
             Text(
-              '3D model generation requires API configuration.\nContact support to enable this feature.',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 12,
-              ),
+              'Il modello 3D è in fase di generazione.\nVerrà visualizzato nella Gallery quando pronto.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ],
@@ -346,16 +310,33 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
   }
 
   Widget _buildErrorView(String error) {
-    // Detect validation errors for user-friendly messaging
     final isValidationError = error.contains('not_a_drawing') ||
         error.contains('Not a valid drawing') ||
         error.contains('does not appear to be a drawing');
+    final isConfigError = error.contains('api_config_missing') ||
+        error.contains('API configuration');
 
-    final title = isValidationError
-        ? 'Not a Drawing'
-        : 'Oops! Something went wrong';
-    final icon = isValidationError ? Icons.image_not_supported : Icons.error_outline;
-    final color = isValidationError ? Colors.orange : AppTheme.errorColor;
+    final String title;
+    final IconData icon;
+    final Color color;
+    final String message;
+
+    if (isValidationError) {
+      title = 'Non è un Disegno';
+      icon = Icons.image_not_supported;
+      color = Colors.orange;
+      message = 'L\'immagine caricata non sembra un disegno. Riprova con una foto di uno sketch su carta.';
+    } else if (isConfigError) {
+      title = 'Configurazione API Mancante';
+      icon = Icons.settings_suggest;
+      color = Colors.orange;
+      message = 'Il token REPLICATE_API_TOKEN non è configurato. Aggiungilo alla tabella system_config su Supabase.';
+    } else {
+      title = 'Errore di Elaborazione';
+      icon = Icons.error_outline;
+      color = AppTheme.errorColor;
+      message = error;
+    }
 
     return Center(
       child: Padding(
@@ -366,15 +347,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
             Container(
               width: 100,
               height: 100,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 60,
-                color: Colors.white,
-              ),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(icon, size: 60, color: Colors.white),
             ).animate().shake(),
 
             const SizedBox(height: AppTheme.spaceL),
@@ -389,9 +363,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
             const SizedBox(height: AppTheme.spaceM),
 
             Text(
-              isValidationError
-                  ? 'The image you uploaded doesn\'t look like a drawing. Please try with a photo of a hand-drawn sketch on paper.'
-                  : error,
+              message,
               style: TextStyle(color: Colors.grey.shade600),
               textAlign: TextAlign.center,
             ),
@@ -408,9 +380,15 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                 ),
                 const SizedBox(width: AppTheme.spaceM),
                 ElevatedButton.icon(
-                  onPressed: _startProcessing,
+                  onPressed: () {
+                    setState(() {
+                      _pipelineStarted = false;
+                      _pipelineError = null;
+                    });
+                    _startProcessing();
+                  },
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Try Again'),
+                  label: const Text('Riprova'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,

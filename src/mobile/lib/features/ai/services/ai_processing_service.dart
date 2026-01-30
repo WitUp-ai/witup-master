@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/debug_log_service.dart';
@@ -14,7 +13,7 @@ class AIProcessingService {
 
   AIProcessingService({SupabaseClient? supabase})
       : _supabase = supabase ?? Supabase.instance.client,
-        _supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+        _supabaseUrl = Supabase.instance.client.rest.url.toString().replaceAll('/rest/v1', '');
 
   /// Trigger processing for a drawing
   /// For MVP: processes directly in client, marks as completed

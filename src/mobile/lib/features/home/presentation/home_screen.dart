@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../camera/providers/camera_provider.dart';
-import '../../admin/providers/admin_provider.dart';
 
 /// Home screen - Main hub after authentication
 class HomeScreen extends ConsumerStatefulWidget {
@@ -22,51 +21,112 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final List<Widget> _pages = [
     _HomeTab(onSwitchTab: (i) => setState(() { _selectedIndex = i; })),
     const _GalleryTab(),
-    const _ProfileTab(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: _pages[_selectedIndex],
-      bottomNavigationBar: Container(
+      // FAB Camera button - center prominent
+      floatingActionButton: Container(
+        width: 64,
+        height: 64,
         decoration: BoxDecoration(
-          color: Colors.white,
+          gradient: AppTheme.magicGradient,
+          shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
+              color: AppTheme.primaryColor.withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-          },
-          elevation: 0,
+        child: FloatingActionButton(
+          onPressed: () => context.push('/camera'),
           backgroundColor: Colors.transparent,
-          selectedItemColor: AppTheme.primaryColor,
-          unselectedItemColor: AppTheme.textTertiary,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
+          elevation: 0,
+          highlightElevation: 0,
+          child: const Icon(Icons.camera_alt, color: Colors.white, size: 30),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        elevation: 16,
+        color: Colors.white,
+        surfaceTintColor: Colors.white,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              // Home tab
+              _NavBarItem(
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home,
+                label: 'Home',
+                isSelected: _selectedIndex == 0,
+                onTap: () => setState(() { _selectedIndex = 0; }),
+              ),
+              // Spacer for FAB
+              const SizedBox(width: 48),
+              // Gallery 3D tab
+              _NavBarItem(
+                icon: Icons.view_in_ar_outlined,
+                activeIcon: Icons.view_in_ar,
+                label: 'Gallery 3D',
+                isSelected: _selectedIndex == 1,
+                onTap: () => setState(() { _selectedIndex = 1; }),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Custom nav bar item
+class _NavBarItem extends StatelessWidget {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavBarItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? activeIcon : icon,
+              color: isSelected ? AppTheme.primaryColor : AppTheme.textTertiary,
+              size: 26,
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.photo_library_outlined),
-              activeIcon: Icon(Icons.photo_library),
-              label: 'Gallery',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                color: isSelected ? AppTheme.primaryColor : AppTheme.textTertiary,
+              ),
             ),
           ],
         ),
@@ -518,122 +578,6 @@ class _DrawingCard extends StatelessWidget {
   }
 }
 
-/// Profile Tab - User settings and info
-class _ProfileTab extends ConsumerWidget {
-  const _ProfileTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final userName = authState.user?.userMetadata?['name'] ?? 'User';
-    final userEmail = authState.user?.email ?? 'user@email.com';
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppTheme.spaceM),
-        child: Column(
-          children: [
-            // Profile Header
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                gradient: AppTheme.magicGradient,
-                shape: BoxShape.circle,
-                boxShadow: AppTheme.shadowMedium,
-              ),
-              child: Center(
-                child: Text(
-                  userName.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
-
-            const SizedBox(height: AppTheme.spaceM),
-
-            Text(
-              userName,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-
-            const SizedBox(height: AppTheme.spaceXS),
-
-            Text(
-              userEmail,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
-            ),
-
-            const SizedBox(height: AppTheme.spaceXL),
-
-            // Admin Panel (visible only to admins)
-            Consumer(
-              builder: (context, ref, _) {
-                final isAdmin = ref.watch(isAdminProvider);
-                return isAdmin.when(
-                  data: (admin) => admin
-                      ? _ProfileMenuItem(
-                          icon: Icons.admin_panel_settings,
-                          title: 'Admin Panel',
-                          color: AppTheme.primaryColor,
-                          onTap: () => context.push('/admin'),
-                        )
-                      : const SizedBox.shrink(),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                );
-              },
-            ),
-
-            // Menu Items
-            _ProfileMenuItem(
-              icon: Icons.person,
-              title: 'Edit Profile',
-              onTap: () {},
-            ),
-            _ProfileMenuItem(
-              icon: Icons.notifications,
-              title: 'Notifications',
-              onTap: () {},
-            ),
-            _ProfileMenuItem(
-              icon: Icons.payment,
-              title: 'Subscription',
-              onTap: () {},
-            ),
-            _ProfileMenuItem(
-              icon: Icons.help,
-              title: 'Help & Support',
-              onTap: () {},
-            ),
-            _ProfileMenuItem(
-              icon: Icons.info,
-              title: 'About',
-              onTap: () {},
-            ),
-            _ProfileMenuItem(
-              icon: Icons.logout,
-              title: 'Logout',
-              color: AppTheme.errorColor,
-              onTap: () async {
-                await ref.read(authProvider.notifier).signOut();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Quick Action Card Widget
 class _QuickActionCard extends StatelessWidget {
   final IconData icon;
@@ -682,32 +626,3 @@ class _QuickActionCard extends StatelessWidget {
   }
 }
 
-/// Profile Menu Item Widget
-class _ProfileMenuItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  final Color? color;
-
-  const _ProfileMenuItem({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final itemColor = color ?? AppTheme.textPrimary;
-
-    return ListTile(
-      leading: Icon(icon, color: itemColor),
-      title: Text(
-        title,
-        style: TextStyle(color: itemColor),
-      ),
-      trailing: Icon(Icons.chevron_right, color: itemColor),
-      onTap: onTap,
-    );
-  }
-}

@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -249,62 +247,58 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             ),
           ),
 
-          // Action buttons - Show Gallery prominently on web
+          // Action buttons - always show both
           Padding(
             padding: const EdgeInsets.all(AppTheme.spaceL),
-            child: kIsWeb
-                ? Column(
-                    children: [
-                      // On web, show Gallery as primary option
-                      SizedBox(
-                        width: double.infinity,
-                        height: 60,
-                        child: ElevatedButton.icon(
-                          onPressed: _pickFromGallery,
-                          icon: const Icon(Icons.photo_library, size: 28),
-                          label: const Text(
-                            'Select from Gallery',
-                            style: TextStyle(fontSize: 18),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                            ),
-                          ),
-                        ),
+            child: Column(
+              children: [
+                // Primary: Take Photo
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: _captureFromCamera,
+                    icon: const Icon(Icons.camera_alt, size: 24),
+                    label: const Text(
+                      'Scatta Foto',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                       ),
-                      const SizedBox(height: AppTheme.spaceS),
-                      Text(
-                        'Choose a photo of your drawing from your device',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Gallery button
-                      _CaptureButton(
-                        icon: Icons.photo_library,
-                        label: 'Gallery',
-                        onPressed: _pickFromGallery,
-                        isPrimary: false,
-                      ),
-
-                      // Camera button
-                      _CaptureButton(
-                        icon: Icons.camera_alt,
-                        label: 'Camera',
-                        onPressed: _captureFromCamera,
-                        isPrimary: true,
-                      ),
-                    ],
+                      elevation: 4,
+                    ),
                   ),
+                ),
+                const SizedBox(height: AppTheme.spaceM),
+                // Secondary: Upload from Gallery
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickFromGallery,
+                    icon: const Icon(Icons.photo_library, size: 22),
+                    label: const Text(
+                      'Carica da Galleria',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        width: 2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -442,58 +436,3 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 }
 
-/// Capture button widget
-class _CaptureButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final bool isPrimary;
-
-  const _CaptureButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    required this.isPrimary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onPressed,
-          child: Container(
-            width: isPrimary ? 80 : 60,
-            height: isPrimary ? 80 : 60,
-            decoration: BoxDecoration(
-              gradient: isPrimary ? AppTheme.magicGradient : null,
-              color: isPrimary ? null : Colors.white.withValues(alpha:0.2),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white,
-                width: isPrimary ? 4 : 2,
-              ),
-              boxShadow: isPrimary ? AppTheme.shadowMedium : null,
-            ),
-            child: Icon(
-              icon,
-              size: isPrimary ? 40 : 28,
-              color: Colors.white,
-            ),
-          ),
-        )
-            .animate()
-            .scale(duration: 300.ms, curve: Curves.elasticOut),
-        const SizedBox(height: AppTheme.spaceS),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha:0.9),
-            fontSize: 14,
-          ),
-        ),
-      ],
-    );
-  }
-}

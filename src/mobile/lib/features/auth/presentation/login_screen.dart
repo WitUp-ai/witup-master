@@ -306,6 +306,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 const SizedBox(height: AppTheme.spaceL),
 
+                // Demo Access
+                SizedBox(
+                  height: 48,
+                  child: TextButton.icon(
+                    onPressed: authState.isLoading
+                        ? null
+                        : () async {
+                            try {
+                              await ref.read(authProvider.notifier).signInWithEmail(
+                                    'demo@draw2toy.com',
+                                    'demodemo',
+                                  );
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Demo login failed: $e'),
+                                    backgroundColor: AppTheme.errorColor,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.play_circle_outline, size: 20),
+                    label: const Text(
+                      'Accesso Demo',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.accentColor,
+                    ),
+                  ),
+                )
+                    .animate()
+                    .fadeIn(delay: 1200.ms),
+
+                const SizedBox(height: AppTheme.spaceS),
+
                 // Sign Up Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -326,7 +364,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ],
                 )
                     .animate()
-                    .fadeIn(delay: 1200.ms),
+                    .fadeIn(delay: 1300.ms),
               ],
             ),
           ),

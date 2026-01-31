@@ -12,12 +12,16 @@ import '../../features/processing/presentation/processing_screen.dart';
 import '../../features/viewer/presentation/viewer_screen.dart';
 import '../../features/admin/presentation/admin_dashboard_screen.dart';
 
+/// Global navigator key shared with DrawingNotifier
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
 /// Router provider
 final routerProvider = Provider<GoRouter>((ref) {
   // Watch auth state changes
   final authState = ref.watch(authProvider);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     debugLogDiagnostics: true,
     // Refresh router when auth state changes

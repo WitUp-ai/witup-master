@@ -21,9 +21,11 @@ interface ProcessRequest {
 interface ProcessingResult {
   success: boolean;
   processed_image_url?: string;
+  concept_url?: string;
   model_3d_url?: string;
   thumbnail_url?: string;
   processing_time_ms?: number;
+  est_time_seconds?: number;
   error?: string;
 }
 
@@ -37,7 +39,15 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // User-context client: uses anon key + user's JWT for RLS-respecting queries
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: req.headers.get("Authorization")! } },
+    });
+
+    // Service-role client: bypasses RLS for storage and admin operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Load API keys: prefer Deno env, fallback to system_config table
@@ -87,6 +97,7 @@ serve(async (req) => {
       .from("drawings")
       .update({
         model_status: "processing",
+        processing_step: "uploading",
         processing_started_at: new Date().toISOString(),
       })
       .eq("id", drawing_id)
@@ -121,6 +132,8 @@ serve(async (req) => {
     // =========================================
     // STEP 0: VISION VALIDATION (is this a drawing?)
     // =========================================
+    await supabase.from("drawings").update({ processing_step: "validating" }).eq("id", drawing_id);
+
     if (replicateToken) {
       try {
         console.log("Validating drawing with vision model...");
@@ -157,6 +170,8 @@ serve(async (req) => {
     // =========================================
     // STEP 1: BACKGROUND REMOVAL
     // =========================================
+    await supabase.from("drawings").update({ processing_step: "removing_background" }).eq("id", drawing_id);
+
     let processedImageBytes: Uint8Array | null = null;
 
     // Try Replicate first (rembg model)
@@ -203,6 +218,8 @@ serve(async (req) => {
     // =========================================
     // STEP 2: 3D MODEL GENERATION (ASYNC WITH WEBHOOK)
     // =========================================
+    await supabase.from("drawings").update({ processing_step: "generating_3d" }).eq("id", drawing_id);
+
     const imageForModel = processedImageBytes || imageBytes;
     
     if (replicateToken && imageForModel) {
@@ -224,6 +241,7 @@ serve(async (req) => {
     // =========================================
     // STEP 3: GENERATE THUMBNAIL
     // =========================================
+    await supabase.from("drawings").update({ processing_step: "finalizing" }).eq("id", drawing_id);
     const thumbBytes = processedImageBytes || imageBytes;
     const thumbPath = `${drawing_id}/thumbnail.png`;
     await supabase.storage
@@ -251,6 +269,7 @@ serve(async (req) => {
 
     const updateData: Record<string, unknown> = {
       model_status: finalStatus,
+      processing_step: has3DPending ? "waiting_3d" : "done",
       processing_completed_at: finalStatus === "completed" ? new Date().toISOString() : undefined,
     };
 
@@ -292,9 +311,11 @@ serve(async (req) => {
     const result: ProcessingResult = {
       success: true,
       processed_image_url: processedImageUrl || undefined,
+      concept_url: processedImageUrl || undefined,
       model_3d_url: model3dUrl || undefined,
       thumbnail_url: thumbnailUrl || undefined,
       processing_time_ms: processingTimeMs,
+      est_time_seconds: has3DPending ? 120 : 0,
     };
 
     return new Response(JSON.stringify(result), {

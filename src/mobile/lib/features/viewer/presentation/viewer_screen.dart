@@ -6,34 +6,16 @@ import 'package:model_viewer_plus/model_viewer_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Provider to fetch drawing data with signed URLs
+/// Provider to watch drawing data in real-time via Supabase Realtime.
+/// Auto-updates when webhook sets model_3d_url or status changes.
 final drawingDataProvider =
-    FutureProvider.family<Map<String, dynamic>?, String>((ref, drawingId) async {
-  try {
-    final supabase = Supabase.instance.client;
-    final response = await supabase
-        .from('drawings')
-        .select()
-        .eq('id', drawingId)
-        .single();
-
-    // Generate signed URL for original image if it's a storage path
-    final originalPath = response['original_image_url'] as String?;
-    if (originalPath != null && !originalPath.startsWith('http')) {
-      try {
-        final signedUrl = await supabase.storage
-            .from('drawings-original')
-            .createSignedUrl(originalPath, 86400); // 24 hours
-        response['original_image_url'] = signedUrl;
-      } catch (e) {
-        debugPrint('Could not create signed URL for original: $e');
-      }
-    }
-
-    return response;
-  } catch (e) {
-    return null;
-  }
+    StreamProvider.family<Map<String, dynamic>?, String>((ref, drawingId) {
+  final supabase = Supabase.instance.client;
+  return supabase
+      .from('drawings')
+      .stream(primaryKey: ['id'])
+      .eq('id', drawingId)
+      .map((data) => data.isEmpty ? null : data.first);
 });
 
 /// 3D Viewer and AR Preview Screen
@@ -415,10 +397,11 @@ class ViewerScreen extends ConsumerWidget {
   }
 
   void _launchAR(BuildContext context, String modelUrl) {
-    // On supported devices, model_viewer_plus handles AR automatically
+    // model_viewer_plus handles AR natively via its built-in AR icon.
+    // This button reminds the user on desktop where AR is unavailable.
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Tap the AR icon in the 3D viewer to launch AR mode'),
+        content: Text('Usa l\'icona AR nel viewer 3D sopra. AR disponibile solo su dispositivi mobili.'),
       ),
     );
   }

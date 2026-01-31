@@ -82,8 +82,8 @@ class AIProcessingService {
         'drawing_id': drawingId,
         'user_id': userId,
       }),
-    ).timeout(const Duration(seconds: 45), onTimeout: () {
-      throw Exception('Edge Function timeout (45s)');
+    ).timeout(const Duration(seconds: 90), onTimeout: () {
+      throw Exception('Edge Function timeout (90s)');
     });
 
     _debug.log('EdgeFunction', 'Response status: ${response.statusCode}');
@@ -174,7 +174,7 @@ class AIProcessingService {
     try {
       final response = await _supabase
           .from('drawings')
-          .select('model_status, processed_image_url, model_3d_url, processing_error, original_image_url')
+          .select('model_status, processing_step, processed_image_url, model_3d_url, processing_error, original_image_url')
           .eq('id', drawingId)
           .single();
 
@@ -204,13 +204,17 @@ class AIProcessingService {
 class ProcessingResult {
   final bool success;
   final String? processedImageUrl;
+  final String? conceptUrl;
   final String? model3dUrl;
+  final int estTimeSeconds;
   final String? error;
 
   ProcessingResult({
     required this.success,
     this.processedImageUrl,
+    this.conceptUrl,
     this.model3dUrl,
+    this.estTimeSeconds = 0,
     this.error,
   });
 
@@ -218,7 +222,9 @@ class ProcessingResult {
     return ProcessingResult(
       success: json['success'] ?? false,
       processedImageUrl: json['processed_image_url'],
+      conceptUrl: json['concept_url'],
       model3dUrl: json['model_3d_url'],
+      estTimeSeconds: json['est_time_seconds'] ?? 0,
       error: json['error'],
     );
   }
@@ -227,6 +233,7 @@ class ProcessingResult {
 /// Drawing processing status
 class DrawingStatus {
   final String status;
+  final String? processingStep;
   final String? processedImageUrl;
   final String? model3dUrl;
   final String? originalImageUrl;
@@ -234,6 +241,7 @@ class DrawingStatus {
 
   DrawingStatus({
     required this.status,
+    this.processingStep,
     this.processedImageUrl,
     this.model3dUrl,
     this.originalImageUrl,
@@ -249,9 +257,56 @@ class DrawingStatus {
   /// Get the best available image URL
   String? get displayImageUrl => processedImageUrl ?? originalImageUrl;
 
+  /// Get progress percentage (0.0 - 1.0) based on processing step
+  double get progressPercent {
+    switch (processingStep) {
+      case 'uploading':
+        return 0.10;
+      case 'validating':
+        return 0.25;
+      case 'removing_background':
+        return 0.45;
+      case 'generating_3d':
+        return 0.65;
+      case 'finalizing':
+        return 0.85;
+      case 'waiting_3d':
+        return 0.90;
+      default:
+        if (isCompleted) return 1.0;
+        if (isProcessing3D) return 0.70;
+        if (isProcessing) return 0.20;
+        return 0.0;
+    }
+  }
+
+  /// Get human-readable step label in Italian
+  String get stepLabel {
+    switch (processingStep) {
+      case 'uploading':
+        return 'Caricamento immagine...';
+      case 'validating':
+        return 'Validazione disegno con AI...';
+      case 'removing_background':
+        return 'Rimozione sfondo...';
+      case 'generating_3d':
+        return 'Avvio generazione 3D...';
+      case 'finalizing':
+        return 'Finalizzazione...';
+      case 'waiting_3d':
+        return 'Concept 2D pronto! 3D in generazione...';
+      default:
+        if (isCompleted) return 'Completato!';
+        if (isProcessing3D) return 'Generazione modello 3D in corso...';
+        if (isProcessing) return 'Elaborazione in corso...';
+        return 'In attesa...';
+    }
+  }
+
   factory DrawingStatus.fromJson(Map<String, dynamic> json) {
     return DrawingStatus(
       status: json['model_status'] ?? 'pending',
+      processingStep: json['processing_step'],
       processedImageUrl: json['processed_image_url'],
       model3dUrl: json['model_3d_url'],
       originalImageUrl: json['original_image_url'],

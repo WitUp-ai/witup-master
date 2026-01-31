@@ -1,50 +1,53 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Draw2Toy Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Mobile-First PWA
+L'applicazione è una Progressive Web App Flutter. Ogni feature DEVE funzionare su mobile browser (Chrome/Safari). Il design è mobile-first, responsive secondario. L'entry point è `src/mobile/lib/main.dart`.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Supabase as Backend
+Supabase è l'unico backend: Auth, PostgreSQL, Storage, Edge Functions, Realtime. NON si usano backend custom. Le Edge Functions (Deno/TypeScript) gestiscono la logica server-side. Le API keys sono in `system_config` table con fallback su env vars.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. AI Pipeline Asincrona
+Il processing AI è a 2 fasi: Fase 1 sincrona (validazione + bg removal, ~5-10s) ritorna concept 2D immediato. Fase 2 asincrona (3D generation via webhook, ~1-3min). L'utente NON deve restare bloccato in attesa. Il sistema DEVE notificare via Realtime quando il 3D è pronto.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Realtime-First UX
+Ogni stato di processing DEVE essere visibile all'utente in tempo reale via Supabase Realtime `.stream()`. La tabella `drawings` DEVE avere Realtime abilitato (`supabase_realtime` publication). I campi `model_status` e `processing_step` guidano la UI.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Italian UI
+Tutta la UI utente è in italiano. Le label, i messaggi, le notifiche sono in italiano. I log di debug e i commenti nel codice possono essere in inglese.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### VI. Security by Default
+Le Edge Functions usano dual client: anon key + user JWT per RLS, service role per operazioni admin. Le API keys NON sono mai esposte al client. Le credenziali sensibili sono in env vars o `system_config` table con RLS.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### VII. Test Before Deploy
+`flutter test` DEVE passare prima di ogni deploy. `flutter build web --release` DEVE completare senza errori. Deploy su Vercel per il frontend, Supabase Cloud per le Edge Functions.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Technology Stack
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Flutter Web (Dart), Riverpod, GoRouter, flutter_animate |
+| Backend | Supabase Edge Functions (Deno/TypeScript) |
+| Database | Supabase PostgreSQL con RLS |
+| Storage | Supabase Storage (drawings-original, drawings-processed, models-3d, models-thumbnails) |
+| AI | Replicate API (Moondream2, rembg, TripoSR) |
+| Realtime | Supabase Realtime (PostgreSQL CDC) |
+| 3D Viewer | model_viewer_plus (WebXR/AR) |
+| Deploy | Vercel (frontend), Supabase Cloud (backend) |
+| CI/CD | GitHub Actions |
+
+## Development Workflow
+
+1. SpecKit: `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` → `/speckit.analyze`
+2. Implementazione su feature branch `###-feature-name`
+3. `flutter test` → `flutter build web --release`
+4. Deploy Edge Functions: `./supabase.exe functions deploy <name> --project-ref rnfzzmfpykbavuirypfz`
+5. Deploy frontend: `npx vercel --prod --public --yes` da `src/mobile/build/web`
+6. Merge su main
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+La Constitution è il documento autoritativo. Ogni decisione architetturale DEVE essere coerente con questi principi. Modifiche alla Constitution richiedono documentazione esplicita del cambio e della motivazione.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-01-30 | **Last Amended**: 2026-01-30

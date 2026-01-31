@@ -20,6 +20,23 @@ interface WebhookPayload {
   version: string;
 }
 
+// Retry helper for fetch operations
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return response;
+      console.warn(`Fetch attempt ${attempt}/${maxRetries} failed: ${response.status}`);
+    } catch (e) {
+      console.warn(`Fetch attempt ${attempt}/${maxRetries} error: ${e}`);
+    }
+    if (attempt < maxRetries) {
+      await new Promise((r) => setTimeout(r, 1000 * attempt)); // backoff
+    }
+  }
+  throw new Error(`Failed to fetch ${url} after ${maxRetries} attempts`);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -58,10 +75,10 @@ serve(async (req) => {
 
       if (prediction_type === "background_removal" && payload.output) {
         // Download and store processed image
-        const imageUrl = Array.isArray(payload.output) ? payload.output[0] : payload.output;
+        const imageUrl = Array.isArray(payload.output) ? payload.output[0] : String(payload.output);
         console.log("Downloading processed image:", imageUrl);
 
-        const imageResponse = await fetch(imageUrl);
+        const imageResponse = await fetchWithRetry(imageUrl);
         const imageData = await imageResponse.arrayBuffer();
 
         const processedPath = `${user_id}/processed_${drawing_id}.png`;
@@ -95,7 +112,7 @@ serve(async (req) => {
         if (modelUrl) {
           console.log("Downloading 3D model:", modelUrl);
 
-          const modelResponse = await fetch(modelUrl);
+          const modelResponse = await fetchWithRetry(modelUrl);
           const modelData = await modelResponse.arrayBuffer();
 
           const modelPath = `${drawing_id}/model.glb`;
@@ -112,6 +129,7 @@ serve(async (req) => {
               .getPublicUrl(modelPath);
             updateData.model_3d_url = urlData.publicUrl;
             updateData.model_status = "completed";
+            updateData.processing_step = "done";
             updateData.processing_completed_at = new Date().toISOString();
             console.log("3D model uploaded:", urlData.publicUrl);
           }

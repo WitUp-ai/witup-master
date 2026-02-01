@@ -6,8 +6,8 @@ class AppConfig {
 
   // App Info
   static const String appName = 'Draw2Toy';
-  static const String appVersion = '0.3.2';
-  static const String appBuildNumber = '5';
+  static const String appVersion = '0.4.0';
+  static const String appBuildNumber = '6';
 
   // API Configuration
   static const Duration apiTimeout = Duration(seconds: 30);

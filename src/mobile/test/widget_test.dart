@@ -8,7 +8,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mobile_app/main.dart';
-import 'package:mobile_app/main.dart';
 
 void main() {
   testWidgets('Mobile Engine loads successfully', (WidgetTester tester) async {

@@ -1,0 +1,23 @@
+# .clinerules - HUMAN DRIVEN / AI EXECUTED PROTOCOL
+
+## 1. 🤖 AUTONOMIA ESECUTIVA (Zero Friction)
+- **NON chiedere permessi per azioni standard:** Se devi creare un file, una cartella o aggiornare codice, FALLO. Non chiedere "Vuoi che crei il file?".
+- **Database & SQL:**
+    - Se devi modificare il DB, crea il file di migrazione in `supabase/migrations`.
+    - Se hai accesso alla CLI, applicala.
+    - Se NON puoi applicarla, crea il file `.sql`, scrivi nel log "Migration file created", e **CONTINUA** a scrivere il codice backend/frontend assumendo che la migrazione sia applicata. NON FERMARTI ad aspettare l'utente.
+- **Errori:** Se un comando fallisce, prova una soluzione alternativa logica prima di chiedere aiuto.
+
+## 2. 🏗️ RISPETTO ARCHITETTURALE (The Ralph Protocol)
+- Prima di qualsiasi modifica significativa (nuove feature, cambio logica core), **LEGGI** sempre `.spec/system_architecture.md`.
+- Se la richiesta dell'utente contraddice l'architettura, segnalalo: "Questo viola le specifiche in [file]. Procedo comunque o aggiorniamo le specifiche?".
+- Se correggi un bug, assicurati di non rompere la struttura esistente (es. non hardcodare chiavi se l'architettura dice di usare `system_config`).
+
+## 3. 🧠 RUOLI
+- **User (Human):** Definisce l'obiettivo ("Voglio il sistema di crediti").
+- **Cline (AI):** Esegue l'implementazione completa (DB -> Backend -> Frontend).
+- **Output:** Non rispondere con liste di cose che *io* devo fare. Rispondi con "Fatto X, Y e Z. Il sistema è pronto."
+
+## 4. 📝 CONTEXT AWARENESS
+- Mantieni sempre aggiornato il file `.spec/progress.md` (se esiste) o crea un log delle tue azioni.
+- Non dimenticare i file creati 3 messaggi fa.

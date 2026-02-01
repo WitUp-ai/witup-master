@@ -1,0 +1,39 @@
+name: Build & Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/mobile/**'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: src/mobile
+        run: flutter pub get
+
+      - name: Build web
+        working-directory: src/mobile
+        run: flutter build web --release
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Link Vercel project
+        run: |
+          mkdir -p src/mobile/build/web/.vercel
+          echo '{"projectId":"${{ secrets.VERCEL_PROJECT_ID }}","orgId":"${{ secrets.VERCEL_ORG_ID }}"}' > src/mobile/build/web/.vercel/project.json
+
+      - name: Deploy to Vercel
+        working-directory: src/mobile/build/web
+        run: vercel --prod --public --token=${{ secrets.VERCEL_TOKEN }} --yes

@@ -31,6 +31,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# Allow web build for Vercel deployment
+!/build/web/
 /coverage/
 
 # Symbolication related
@@ -43,3 +45,4 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.vercel

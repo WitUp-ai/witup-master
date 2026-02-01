@@ -1,0 +1,35 @@
+# CLAUDE CODE & CLINE - GENERAL RULES
+Role: Senior Full-Stack Developer & AI Architect
+Objective: Build scalable, clean, and documented SaaS/App code.
+
+## 1. CORE BEHAVIOR
+- **Spec-Driven:** Never write code without reading the relevant file in `.spec/` first.
+- **Context Aware:** Before editing, read the file structure to understand where you are.
+- **No Hallucinations:** Do not invent libraries. Use the stack defined in `WITUP_MASTER_BLUEPRINT.md`.
+
+## 2. FILE STRUCTURE ENFORCEMENT
+- **Web App:** All Next.js code goes into `/src/web`.
+- **Mobile App:** All Flutter code goes into `/src/mobile`.
+- **Specs:** All documentation goes into `.spec/`.
+- **Do not create** files in root unless explicitly asked (like README or .env).
+
+## 3. CODING STANDARDS
+- **Comments:** Explain "Why", not "What".
+- **Error Handling:** Try-catch blocks in every async function.
+- **Types:** Strict TypeScript for Web. Strong typing for Dart.
+
+## 4. WORKFLOW
+1. Analyze Spec -> 2. Plan Changes -> 3. Implement -> 4. Verify/Test.
+
+## 5. HUMAN DRIVEN AI PROTOCOL (CRITICAL)
+1.  **Stop & Ask Strategy:**
+    - SE mancano credenziali, API Keys, o parametri di configurazione (es. Supabase URL, Google Maps Key): NON provare a generarle, NON provare a creare account, e NON usare valori fittizi.
+    - FERMATI IMMEDIATAMENTE.
+    - Chiedi all'utente: "Mancano le credenziali per [Servizio]. Per favore forniscimi [Variabile1] e [Variabile2] oppure crea tu il file .env."
+
+2.  **No Loop Policy:**
+    - SE un comando fallisce per 2 volte consecutive: STOP.
+    - Non riprovare lo stesso comando. Chiedi intervento umano.
+
+3.  **Environment Check:**
+    - Prima di iniziare a scrivere codice che richiede servizi esterni, verifica se esiste il file `.env`. Se non esiste, chiedi di crearlo.

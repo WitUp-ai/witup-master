@@ -77,7 +77,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
     final s = _remainingSeconds;
     final min = s ~/ 60;
     final sec = s % 60;
-    return '${min}:${sec.toString().padLeft(2, '0')}';
+    return '$min:${sec.toString().padLeft(2, '0')}';
   }
 
   void _onStatusChanged(String? step) {
@@ -288,7 +288,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
 
                 // Timer
                 Text(
-                  showOvertime ? 'Ancora pochi istanti...' : 'Tempo stimato: ${_countdownText}',
+                  showOvertime ? 'Ancora pochi istanti...' : 'Tempo stimato: $_countdownText',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: showOvertime ? Colors.orange : AppTheme.primaryColor,

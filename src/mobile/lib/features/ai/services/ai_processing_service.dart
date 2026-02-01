@@ -56,6 +56,14 @@ class AIProcessingService {
 
   /// Call Edge Function for AI processing (required — no fallback)
   Future<ProcessingResult> _tryEdgeFunction(String drawingId, String userId) async {
+    // Refresh session to ensure token is valid
+    try {
+      await _supabase.auth.refreshSession();
+      _debug.log('Auth', 'Session refreshed successfully');
+    } catch (e) {
+      _debug.warning('Auth', 'Failed to refresh session: $e');
+    }
+
     final accessToken = _supabase.auth.currentSession?.accessToken;
     if (accessToken == null) {
       throw Exception('Errore Autenticazione: Sessione non valida. Effettua nuovamente il login.');
@@ -63,6 +71,8 @@ class AIProcessingService {
     if (_supabaseUrl.isEmpty) {
       throw Exception('Errore Configurazione: URL Supabase non configurato.');
     }
+
+    _debug.log('Auth', 'Using access token: ${accessToken.substring(0, 20)}...');
 
     final response = await http.post(
       Uri.parse('$_supabaseUrl/functions/v1/process-drawing'),

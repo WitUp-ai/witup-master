@@ -77,7 +77,7 @@ REPLICATE_API_TOKEN=YOUR_REPLICATE_API_TOKEN
 - **Accesso**: Utenti con `role = 'admin'`
 
 ### **Utente Admin Preconfigurato**
-- **Email**: `giovanni@witup.ai`
+- **Email**: `giovanni.sapere@witup.ai`
 - **Ruolo**: `admin` (da impostare dopo deployment)
 - **Configurazione**: Tramite script `.spec/ADMIN_ROLE.sql`
 
@@ -107,7 +107,7 @@ REPLICATE_API_TOKEN=YOUR_REPLICATE_API_TOKEN
 SELECT email, role FROM users WHERE role = 'admin';
 
 -- Se necessario, aggiungi manualmente:
-UPDATE users SET role = 'admin' WHERE email = 'giovanni@witup.ai';
+UPDATE users SET role = 'admin' WHERE email = 'giovanni.sapere@witup.ai';
 ```
 
 ### **3️⃣ TEST APP FLUTTER WEB**
@@ -127,7 +127,7 @@ flutter build web --web-renderer html --release
 
 ### **4️⃣ TEST PANNIELLO ADMIN**
 1. Avvia l'app Flutter web
-2. Accedi con `giovanni@witup.ai` (crea account se necessario)
+2. Accedi con `giovanni.sapere@witup.ai` (crea account se necessario)
 3. Naviga a `http://localhost:PORT/admin`
 4. Verifica che il tab "API & Config" sia accessibile
 5. Inserisci configurazioni:

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/debug_log_service.dart';
@@ -8,16 +7,17 @@ import '../../../core/services/debug_log_service.dart';
 class AIProcessingService {
   final SupabaseClient _supabase;
   final String _supabaseUrl;
+  final String _anonKey;
 
   final _debug = DebugLogService.instance;
 
   AIProcessingService({SupabaseClient? supabase})
       : _supabase = supabase ?? Supabase.instance.client,
-        _supabaseUrl = Supabase.instance.client.rest.url.toString().replaceAll('/rest/v1', '');
+        _supabaseUrl = Supabase.instance.client.rest.url.toString().replaceAll('/rest/v1', ''),
+        _anonKey = const String.fromEnvironment('SUPABASE_ANON_KEY',
+            defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuZnp6bWZweWtiYXZ1aXJ5cGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MjI4MDUsImV4cCI6MjA4NTA5ODgwNX0.H4sV8bYrXz0YVbdC25TSg22iYnMaFbnyRejyEwG2O74');
 
-  /// Trigger processing for a drawing
-  /// For MVP: processes directly in client, marks as completed
-  /// For Production: calls Edge Function with AI APIs
+  /// Trigger AI processing for a drawing via Edge Function
   Future<ProcessingResult> processDrawing({
     required String drawingId,
     required String userId,
@@ -31,25 +31,14 @@ class AIProcessingService {
         'processing_started_at': DateTime.now().toIso8601String(),
       }).eq('id', drawingId).eq('user_id', userId);
 
-      // Try Edge Function first (if deployed)
-      try {
-        _debug.log('Processing', 'Attempting Edge Function call to $_supabaseUrl/functions/v1/process-drawing');
-        final result = await _tryEdgeFunction(drawingId, userId);
-        if (result != null) {
-          _debug.success('Processing', 'Edge Function returned successfully', data: {
-            'has_processed_image': result.processedImageUrl != null,
-            'has_3d_model': result.model3dUrl != null,
-          });
-          return result;
-        }
-        _debug.warning('Processing', 'Edge Function returned null, falling back to MVP mode');
-      } catch (e) {
-        _debug.warning('Processing', 'Edge Function failed, falling back to MVP mode: $e');
-      }
-
-      // Fallback: Direct processing (MVP mode)
-      _debug.log('Processing', 'Using MVP direct processing (simulated)');
-      return await _processDirectly(drawingId, userId);
+      // Call Edge Function (required — no fallback)
+      _debug.log('Processing', 'Calling Edge Function at $_supabaseUrl/functions/v1/process-drawing');
+      final result = await _tryEdgeFunction(drawingId, userId);
+      _debug.success('Processing', 'Edge Function returned successfully', data: {
+        'has_processed_image': result.processedImageUrl != null,
+        'has_3d_model': result.model3dUrl != null,
+      });
+      return result;
     } catch (e) {
       _debug.error('Processing', 'Processing failed', error: e);
 
@@ -65,11 +54,14 @@ class AIProcessingService {
     }
   }
 
-  /// Try to use Edge Function (production mode)
-  Future<ProcessingResult?> _tryEdgeFunction(String drawingId, String userId) async {
+  /// Call Edge Function for AI processing (required — no fallback)
+  Future<ProcessingResult> _tryEdgeFunction(String drawingId, String userId) async {
     final accessToken = _supabase.auth.currentSession?.accessToken;
-    if (accessToken == null || _supabaseUrl.isEmpty) {
-      return null;
+    if (accessToken == null) {
+      throw Exception('Errore Autenticazione: Sessione non valida. Effettua nuovamente il login.');
+    }
+    if (_supabaseUrl.isEmpty) {
+      throw Exception('Errore Configurazione: URL Supabase non configurato.');
     }
 
     final response = await http.post(
@@ -77,6 +69,7 @@ class AIProcessingService {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $accessToken',
+        'apikey': _anonKey,
       },
       body: jsonEncode({
         'drawing_id': drawingId,
@@ -108,65 +101,21 @@ class AIProcessingService {
       return ProcessingResult.fromJson(data);
     }
 
-    _debug.warning('EdgeFunction', 'Non-200 response: ${response.statusCode} - ${response.body}');
-    return null; // Fallback to direct processing
-  }
-
-  /// Direct processing (MVP mode - no external APIs)
-  Future<ProcessingResult> _processDirectly(String drawingId, String userId) async {
-    // Simulate processing delay for UX
-    _debug.warning('MVP', 'Simulating 2s processing delay (no real AI)');
-    await Future.delayed(const Duration(seconds: 2));
-
-    // Get the drawing to retrieve original image URL
-    final drawing = await _supabase
-        .from('drawings')
-        .select('original_image_url')
-        .eq('id', drawingId)
-        .single();
-
-    final originalPath = drawing['original_image_url'] as String?;
-    String? processedUrl;
-
-    // Generate signed URL for the original image (as processed for MVP)
-    if (originalPath != null) {
-      try {
-        processedUrl = await _supabase.storage
-            .from('drawings-original')
-            .createSignedUrl(originalPath, 86400); // 24 hours
-      } catch (e) {
-        debugPrint('Could not create signed URL: $e');
-      }
-    }
-
-    // Update drawing as completed
-    _debug.log('MVP', 'Marking drawing as completed (no 3D model in MVP mode)');
-    await _supabase.from('drawings').update({
-      'model_status': 'completed',
-      'processing_completed_at': DateTime.now().toIso8601String(),
-      'processed_image_url': processedUrl,
-      // model_3d_url will be null until AI APIs are configured
-    }).eq('id', drawingId);
-
-    // Create notification
+    // Parse error from Edge Function response
+    String errorMessage = 'Errore server (${response.statusCode})';
     try {
-      await _supabase.from('notifications').insert({
-        'user_id': userId,
-        'type': 'drawing_processed',
-        'title': 'Your drawing is ready!',
-        'message': 'Your drawing has been processed. Tap to view!',
-        'action_url': '/viewer/$drawingId',
-        'metadata': {'drawing_id': drawingId},
-      });
-    } catch (e) {
-      debugPrint('Could not create notification: $e');
-    }
+      final errorData = jsonDecode(response.body);
+      if (errorData['error'] != null) {
+        errorMessage = errorData['error'].toString();
+      }
+    } catch (_) {}
 
-    return ProcessingResult(
-      success: true,
-      processedImageUrl: processedUrl,
-      model3dUrl: null, // 3D requires AI API configuration
-    );
+    _debug.error('EdgeFunction', 'Non-200 response: ${response.statusCode} - ${response.body}');
+
+    if (response.statusCode == 500) {
+      throw Exception('Errore Configurazione: $errorMessage');
+    }
+    throw Exception('Errore Elaborazione: $errorMessage');
   }
 
   /// Check processing status for a drawing
@@ -180,7 +129,7 @@ class AIProcessingService {
 
       return DrawingStatus.fromJson(response);
     } catch (e) {
-      debugPrint('Status check error: $e');
+      _debug.error('Status', 'Status check error', error: e);
       rethrow;
     }
   }
@@ -265,7 +214,9 @@ class DrawingStatus {
       case 'validating':
         return 0.25;
       case 'removing_background':
-        return 0.45;
+        return 0.35;
+      case 'stylizing':
+        return 0.55;
       case 'generating_3d':
         return 0.65;
       case 'finalizing':
@@ -289,6 +240,8 @@ class DrawingStatus {
         return 'Validazione disegno con AI...';
       case 'removing_background':
         return 'Rimozione sfondo...';
+      case 'stylizing':
+        return 'Trasformazione stile Cuppy...';
       case 'generating_3d':
         return 'Avvio generazione 3D...';
       case 'finalizing':

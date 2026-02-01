@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+CREDENTIALS_ADMIN.md
 
 # Node
 node_modules/

@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Admin emails (project owner + authorized admins)
-const _adminEmails = ['giovanni@witup.ai', 'testuser@gmail.com'];
+/// CONFIGURAZIONE: Account admin autorizzati
+const _adminEmails = ['giovanni.sapere@witup.ai'];
 
 /// Check if current user is admin
 final isAdminProvider = FutureProvider<bool>((ref) async {
@@ -153,6 +153,7 @@ class SystemConfig {
   final String key;
   final String value;
   final String? description;
+  final bool isSecret;
   final DateTime updatedAt;
   final String? updatedBy;
 
@@ -160,6 +161,7 @@ class SystemConfig {
     required this.key,
     required this.value,
     this.description,
+    this.isSecret = false,
     required this.updatedAt,
     this.updatedBy,
   });
@@ -169,6 +171,7 @@ class SystemConfig {
       key: json['key'] as String,
       value: json['value'] as String,
       description: json['description'] as String?,
+      isSecret: json['is_secret'] as bool? ?? false,
       updatedAt: DateTime.parse(json['updated_at'] as String),
       updatedBy: json['updated_by'] as String?,
     );
@@ -179,13 +182,177 @@ class SystemConfig {
       'key': key,
       'value': value,
       'description': description,
+      'is_secret': isSecret,
       'updated_at': updatedAt.toUtc().toIso8601String(),
       'updated_by': updatedBy,
     };
   }
 
-  bool get isSensitive => key.contains('TOKEN') || key.contains('KEY') || key.contains('SECRET');
+  bool get isSensitive => isSecret || key.contains('TOKEN') || key.contains('KEY') || key.contains('SECRET');
 }
+
+/// ============================================================================
+/// USAGE LOGS PROVIDERS (Cost Intelligence)
+/// ============================================================================
+
+/// Usage log model
+class UsageLog {
+  final String id;
+  final String? drawingId;
+  final String? userId;
+  final String provider;
+  final String? model;
+  final String? operation;
+  final String status;
+  final double? costEstimated;
+  final int? latencyMs;
+  final String? errorMessage;
+  final DateTime createdAt;
+
+  UsageLog({
+    required this.id,
+    this.drawingId,
+    this.userId,
+    required this.provider,
+    this.model,
+    this.operation,
+    required this.status,
+    this.costEstimated,
+    this.latencyMs,
+    this.errorMessage,
+    required this.createdAt,
+  });
+
+  factory UsageLog.fromJson(Map<String, dynamic> json) {
+    return UsageLog(
+      id: json['id'] as String,
+      drawingId: json['drawing_id'] as String?,
+      userId: json['user_id'] as String?,
+      provider: json['provider'] as String,
+      model: json['model'] as String?,
+      operation: json['operation'] as String?,
+      status: json['status'] as String,
+      costEstimated: (json['cost_estimated'] as num?)?.toDouble(),
+      latencyMs: json['latency_ms'] as int?,
+      errorMessage: json['error_message'] as String?,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+}
+
+/// Cost summary stats
+class CostSummary {
+  final double totalCostToday;
+  final double totalCostMonth;
+  final int totalCallsToday;
+  final int totalCallsMonth;
+  final int errorsToday;
+  final double monthlyLimit;
+  final Map<String, double> costByProvider;
+  final Map<String, int> callsByOperation;
+
+  CostSummary({
+    required this.totalCostToday,
+    required this.totalCostMonth,
+    required this.totalCallsToday,
+    required this.totalCallsMonth,
+    required this.errorsToday,
+    required this.monthlyLimit,
+    required this.costByProvider,
+    required this.callsByOperation,
+  });
+}
+
+/// Recent usage logs
+final usageLogsProvider = FutureProvider<List<UsageLog>>((ref) async {
+  final supabase = Supabase.instance.client;
+  try {
+    final result = await supabase
+        .from('usage_logs')
+        .select('*')
+        .order('created_at', ascending: false)
+        .limit(100);
+    return (result as List).map((item) => UsageLog.fromJson(item)).toList();
+  } catch (_) {
+    return [];
+  }
+});
+
+/// Cost summary for dashboard
+final costSummaryProvider = FutureProvider<CostSummary>((ref) async {
+  final supabase = Supabase.instance.client;
+
+  final now = DateTime.now().toUtc();
+  final todayStart = DateTime.utc(now.year, now.month, now.day).toIso8601String();
+  final monthStart = DateTime.utc(now.year, now.month, 1).toIso8601String();
+
+  // Get monthly limit from config
+  double monthlyLimit = 10.0;
+  try {
+    final limitResult = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'MONTHLY_SPEND_LIMIT')
+        .maybeSingle();
+    if (limitResult != null) {
+      monthlyLimit = double.tryParse(limitResult['value'] as String) ?? 10.0;
+    }
+  } catch (_) {}
+
+  try {
+    // All logs this month
+    final monthLogs = await supabase
+        .from('usage_logs')
+        .select('*')
+        .gte('created_at', monthStart)
+        .order('created_at', ascending: false);
+
+    final logs = (monthLogs as List).map((e) => UsageLog.fromJson(e)).toList();
+
+    double totalCostMonth = 0;
+    double totalCostToday = 0;
+    int totalCallsToday = 0;
+    int errorsToday = 0;
+    final costByProvider = <String, double>{};
+    final callsByOperation = <String, int>{};
+
+    for (final log in logs) {
+      final cost = log.costEstimated ?? 0;
+      totalCostMonth += cost;
+      costByProvider[log.provider] = (costByProvider[log.provider] ?? 0) + cost;
+      final op = log.operation ?? 'unknown';
+      callsByOperation[op] = (callsByOperation[op] ?? 0) + 1;
+
+      if (log.createdAt.toIso8601String().compareTo(todayStart) >= 0) {
+        totalCostToday += cost;
+        totalCallsToday++;
+        if (log.status != 'success') errorsToday++;
+      }
+    }
+
+    return CostSummary(
+      totalCostToday: totalCostToday,
+      totalCostMonth: totalCostMonth,
+      totalCallsToday: totalCallsToday,
+      totalCallsMonth: logs.length,
+      errorsToday: errorsToday,
+      monthlyLimit: monthlyLimit,
+      costByProvider: costByProvider,
+      callsByOperation: callsByOperation,
+    );
+  } catch (_) {
+    return CostSummary(
+      totalCostToday: 0,
+      totalCostMonth: 0,
+      totalCallsToday: 0,
+      totalCallsMonth: 0,
+      errorsToday: 0,
+      monthlyLimit: monthlyLimit,
+      costByProvider: {},
+      callsByOperation: {},
+    );
+  }
+});
 
 /// Default system configurations (fallback if DB not ready)
 final defaultSystemConfigs = [

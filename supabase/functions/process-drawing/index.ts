@@ -6,6 +6,60 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
+const FUNCTION_VERSION = "2026-01-31-v7";
+
+/** Log an AI operation to usage_logs for cost tracking */
+async function logUsage(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    drawing_id?: string;
+    user_id?: string;
+    provider: string;
+    model?: string;
+    operation: string;
+    status: string;
+    cost_estimated?: number;
+    latency_ms?: number;
+    error_message?: string;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  try {
+    await supabase.from("usage_logs").insert({
+      drawing_id: params.drawing_id || null,
+      user_id: params.user_id || null,
+      provider: params.provider,
+      model: params.model || null,
+      operation: params.operation,
+      status: params.status,
+      cost_estimated: params.cost_estimated || null,
+      latency_ms: params.latency_ms || null,
+      error_message: params.error_message || null,
+      metadata: params.metadata || null,
+    });
+  } catch (e) {
+    console.error("Failed to log usage:", e);
+  }
+}
+
+/** Load a cost config value from system_config */
+async function getCostConfig(
+  supabase: ReturnType<typeof createClient>,
+  key: string,
+  fallback: number
+): Promise<number> {
+  try {
+    const { data } = await supabase
+      .from("system_config")
+      .select("value")
+      .eq("key", key)
+      .maybeSingle();
+    return data ? parseFloat(data.value) || fallback : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -27,6 +81,39 @@ interface ProcessingResult {
   processing_time_ms?: number;
   est_time_seconds?: number;
   error?: string;
+}
+
+class BillingError extends Error {
+  constructor() {
+    super("Credito Replicate esaurito. Ricarica su replicate.com/account/billing.");
+    this.name = "BillingError";
+  }
+}
+
+/** Create a Replicate prediction, throwing BillingError on 402 */
+async function createReplicatePrediction(
+  token: string,
+  version: string,
+  input: Record<string, unknown>,
+  extra?: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const response = await fetch("https://api.replicate.com/v1/predictions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Token ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ version, input, ...extra }),
+  });
+
+  if (response.status === 402) {
+    throw new BillingError();
+  }
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Replicate API error: ${response.status} - ${errText}`);
+  }
+  return await response.json();
 }
 
 serve(async (req) => {
@@ -79,7 +166,53 @@ serve(async (req) => {
       );
     }
 
-    console.log("API keys loaded. Replicate:", replicateToken ? "OK" : "MISSING");
+    console.log(`[${FUNCTION_VERSION}] API keys loaded. Replicate:`, replicateToken ? "OK" : "MISSING");
+
+    // Load cost estimates from system_config
+    const costVision = await getCostConfig(supabase, "COST_VISION_VALIDATION", 0.002);
+    const costBgRemoval = await getCostConfig(supabase, "COST_BACKGROUND_REMOVAL", 0.005);
+    const costStylization = await getCostConfig(supabase, "COST_STYLIZATION", 0.02);
+    const cost3D = await getCostConfig(supabase, "COST_3D_GENERATION", 0.05);
+
+    // Quick credit check: try creating a prediction with a real model to verify billing
+    if (replicateToken) {
+      const testRes = await fetch("https://api.replicate.com/v1/predictions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Token ${replicateToken}`,
+          "Content-Type": "application/json",
+        },
+        // Use rembg version with minimal dummy input — will fail on input validation but AFTER billing check
+        body: JSON.stringify({
+          version: "fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003",
+          input: { image: "https://example.com/nonexistent.png" },
+        }),
+      });
+      console.log(`Billing check response: ${testRes.status}`);
+      if (testRes.status === 402) {
+        console.error("BILLING CHECK FAILED: Replicate has no credit");
+        return new Response(JSON.stringify({
+          success: false,
+          error: "billing_error",
+          error_message: "Credito Replicate esaurito. Ricarica su replicate.com/account/billing.",
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Cancel the test prediction if it was created (201)
+      if (testRes.status === 201) {
+        try {
+          const testPred = await testRes.json();
+          if (testPred.id) {
+            await fetch(`https://api.replicate.com/v1/predictions/${testPred.id}/cancel`, {
+              method: "POST",
+              headers: { "Authorization": `Token ${replicateToken}` },
+            });
+          }
+        } catch { /* ignore */ }
+      }
+    }
 
     const { drawing_id, user_id, style = "cartoon", quality = "standard" }: ProcessRequest = await req.json();
 
@@ -146,6 +279,12 @@ serve(async (req) => {
           validation_completed_at: new Date().toISOString(),
         }).eq("id", drawing_id);
 
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "moondream2",
+          operation: "vision_validation", status: "success",
+          cost_estimated: costVision, latency_ms: Date.now() - startTime,
+        });
+
         if (!validationResult.is_drawing) {
           await supabase.from("drawings").update({
             model_status: "failed",
@@ -163,6 +302,13 @@ serve(async (req) => {
         }
         console.log("Drawing validation passed");
       } catch (e) {
+        if (e instanceof BillingError) throw e;
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "moondream2",
+          operation: "vision_validation", status: "error",
+          cost_estimated: 0, latency_ms: Date.now() - startTime,
+          error_message: e instanceof Error ? e.message : String(e),
+        });
         console.warn("Vision validation failed, proceeding anyway:", e);
       }
     }
@@ -178,10 +324,22 @@ serve(async (req) => {
     if (replicateToken) {
       try {
         console.log("Attempting background removal with Replicate...");
+        const bgStart = Date.now();
         processedImageBytes = await removeBackgroundReplicate(imageBytes, replicateToken);
         console.log("Replicate background removal succeeded");
-      } catch (e) {
-        console.error("Replicate background removal failed:", e);
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "rembg",
+          operation: "background_removal", status: "success",
+          cost_estimated: costBgRemoval, latency_ms: Date.now() - bgStart,
+        });
+      } catch (e: unknown) {
+        if (e instanceof BillingError) throw e;
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "rembg",
+          operation: "background_removal", status: "error",
+          cost_estimated: 0, error_message: e instanceof Error ? e.message : String(e),
+        });
+        console.error("Replicate background removal failed:", e instanceof Error ? e.message : String(e));
       }
     }
 
@@ -189,9 +347,20 @@ serve(async (req) => {
     if (!processedImageBytes && removeBgApiKey) {
       try {
         console.log("Attempting background removal with Remove.bg...");
+        const bgStart2 = Date.now();
         processedImageBytes = await removeBackgroundRemoveBg(imageBytes, removeBgApiKey);
         console.log("Remove.bg background removal succeeded");
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "removebg", model: "removebg-v1",
+          operation: "background_removal", status: "success",
+          cost_estimated: costBgRemoval, latency_ms: Date.now() - bgStart2,
+        });
       } catch (e) {
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "removebg", model: "removebg-v1",
+          operation: "background_removal", status: "error",
+          cost_estimated: 0, error_message: e instanceof Error ? e.message : String(e),
+        });
         console.error("Remove.bg background removal failed:", e);
       }
     }
@@ -216,12 +385,60 @@ serve(async (req) => {
     }
 
     // =========================================
+    // STEP 1.5: CUPPY STYLIZATION (img2img with Flux Schnell)
+    // =========================================
+    let stylizedImageUrl: string | null = null;
+
+    if (processedImageBytes && replicateToken) {
+      await supabase.from("drawings").update({ processing_step: "stylizing" }).eq("id", drawing_id);
+
+      const stylizeStart = Date.now();
+      try {
+        console.log("Stylizing with Flux Schnell (Cuppy style)...");
+        const stylizedBytes = await stylizeWithFlux(processedImageBytes, replicateToken);
+
+        if (stylizedBytes) {
+          const stylizedPath = `${user_id}/stylized_${drawing_id}.png`;
+          const { error: stylizeUploadError } = await supabase.storage
+            .from("drawings-processed")
+            .upload(stylizedPath, stylizedBytes, {
+              contentType: "image/png",
+              upsert: true,
+            });
+
+          if (!stylizeUploadError) {
+            const { data: stylizedUrlData } = supabase.storage
+              .from("drawings-processed")
+              .getPublicUrl(stylizedPath);
+            stylizedImageUrl = stylizedUrlData.publicUrl;
+            console.log("Stylized image uploaded:", stylizedImageUrl);
+          }
+        }
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "sdxl",
+          operation: "stylization", status: "success",
+          cost_estimated: costStylization, latency_ms: Date.now() - stylizeStart,
+        });
+      } catch (e) {
+        if (e instanceof BillingError) throw e;
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "sdxl",
+          operation: "stylization", status: "error",
+          cost_estimated: 0, latency_ms: Date.now() - stylizeStart,
+          error_message: e instanceof Error ? e.message : String(e),
+        });
+        console.error("SDXL stylization failed, using plain bg-removed image:", e);
+      }
+    }
+
+    // =========================================
     // STEP 2: 3D MODEL GENERATION (ASYNC WITH WEBHOOK)
     // =========================================
     await supabase.from("drawings").update({ processing_step: "generating_3d" }).eq("id", drawing_id);
 
     const imageForModel = processedImageBytes || imageBytes;
-    
+    let has3DPending = false;
+
     if (replicateToken && imageForModel) {
       try {
         console.log("Starting async 3D generation with Replicate TripoSR...");
@@ -233,54 +450,46 @@ serve(async (req) => {
           supabase
         );
         console.log("3D generation started async, prediction ID:", predictionId);
+        has3DPending = true;
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "triposr",
+          operation: "3d_generation", status: "success",
+          cost_estimated: cost3D,
+          metadata: { prediction_id: predictionId, async: true },
+        });
       } catch (e) {
+        if (e instanceof BillingError) throw e;
+        await logUsage(supabase, {
+          drawing_id, user_id, provider: "replicate", model: "triposr",
+          operation: "3d_generation", status: "error",
+          cost_estimated: 0, error_message: e instanceof Error ? e.message : String(e),
+        });
         console.error("Failed to start 3D generation:", e);
       }
     }
 
     // =========================================
-    // STEP 3: GENERATE THUMBNAIL
-    // =========================================
-    await supabase.from("drawings").update({ processing_step: "finalizing" }).eq("id", drawing_id);
-    const thumbBytes = processedImageBytes || imageBytes;
-    const thumbPath = `${drawing_id}/thumbnail.png`;
-    await supabase.storage
-      .from("models-thumbnails")
-      .upload(thumbPath, thumbBytes, {
-        contentType: "image/png",
-        upsert: true,
-      });
-    const { data: thumbUrlData } = supabase.storage
-      .from("models-thumbnails")
-      .getPublicUrl(thumbPath);
-    thumbnailUrl = thumbUrlData.publicUrl;
-
-    // =========================================
-    // STEP 4: UPDATE DATABASE
+    // STEP 3: CRITICAL DB UPDATE (before thumbnail — must not be blocked)
     // =========================================
     const processingTimeMs = Date.now() - startTime;
-
-    // If 3D generation was started async (webhook), keep status as "processing_3d"
-    // Only mark "completed" if no 3D generation was attempted or if model URL is available
-    const has3DPending = replicateToken && imageForModel; // 3D was kicked off async
     const finalStatus = has3DPending && !model3dUrl ? "processing_3d" : "completed";
+    const conceptUrl = stylizedImageUrl || processedImageUrl || null;
 
-    console.log(`Setting drawing status to: ${finalStatus}`);
+    console.log(`Setting drawing status to: ${finalStatus}, concept: ${conceptUrl ? "YES" : "NO"}`);
 
     const updateData: Record<string, unknown> = {
       model_status: finalStatus,
       processing_step: has3DPending ? "waiting_3d" : "done",
-      processing_completed_at: finalStatus === "completed" ? new Date().toISOString() : undefined,
     };
 
+    if (finalStatus === "completed") {
+      updateData.processing_completed_at = new Date().toISOString();
+    }
     if (processedImageUrl) {
       updateData.processed_image_url = processedImageUrl;
     }
     if (model3dUrl) {
       updateData.model_3d_url = model3dUrl;
-    }
-    if (thumbnailUrl) {
-      updateData.thumbnail_url = thumbnailUrl;
     }
 
     await supabase
@@ -288,16 +497,42 @@ serve(async (req) => {
       .update(updateData)
       .eq("id", drawing_id);
 
+    console.log("Critical DB update done — UI should transition now");
+
     // =========================================
-    // STEP 5: CREATE NOTIFICATION
+    // STEP 4: THUMBNAIL (non-critical, best-effort)
+    // =========================================
+    try {
+      const thumbBytes = processedImageBytes || imageBytes;
+      const thumbPath = `${drawing_id}/thumbnail.png`;
+      await supabase.storage
+        .from("models-thumbnails")
+        .upload(thumbPath, thumbBytes, {
+          contentType: "image/png",
+          upsert: true,
+        });
+      const { data: thumbUrlData } = supabase.storage
+        .from("models-thumbnails")
+        .getPublicUrl(thumbPath);
+      thumbnailUrl = thumbUrlData.publicUrl;
+
+      if (thumbnailUrl) {
+        await supabase.from("drawings").update({ thumbnail_url: thumbnailUrl }).eq("id", drawing_id);
+      }
+    } catch (thumbError) {
+      console.error("Thumbnail upload failed (non-critical):", thumbError);
+    }
+
+    // =========================================
+    // STEP 5: NOTIFICATION (non-critical, best-effort)
     // =========================================
     try {
       await supabase.from("notifications").insert({
         user_id: user_id,
         type: "drawing_processed",
         title: "Your drawing is ready!",
-        message: model3dUrl
-          ? "Your drawing has been transformed into 3D! Tap to view in AR!"
+        message: has3DPending
+          ? "Your drawing concept is ready! 3D model is generating..."
           : "Your drawing has been processed. Tap to view!",
         action_url: `/viewer/${drawing_id}`,
         metadata: { drawing_id, has_3d: !!model3dUrl },
@@ -308,10 +543,11 @@ serve(async (req) => {
 
     console.log(`Processing complete in ${processingTimeMs}ms`);
 
-    const result: ProcessingResult = {
+    const result: ProcessingResult & { fn_version?: string } = {
       success: true,
+      fn_version: FUNCTION_VERSION,
       processed_image_url: processedImageUrl || undefined,
-      concept_url: processedImageUrl || undefined,
+      concept_url: conceptUrl || undefined,
       model_3d_url: model3dUrl || undefined,
       thumbnail_url: thumbnailUrl || undefined,
       processing_time_ms: processingTimeMs,
@@ -322,8 +558,12 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Processing error:", error);
+
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const isBilling = error instanceof BillingError;
+    const errorKey = isBilling ? "billing_error" : errMsg;
 
     // Try to update status to failed
     try {
@@ -339,7 +579,7 @@ serve(async (req) => {
           .from("drawings")
           .update({
             model_status: "failed",
-            processing_error: error.message,
+            processing_error: errMsg,
           })
           .eq("id", drawing_id);
       }
@@ -348,7 +588,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: errorKey, error_message: errMsg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -365,26 +605,15 @@ async function validateDrawingWithVision(
   const base64Image = base64Encode(imageBytes);
 
   // Use Moondream vision model to check if the image is a child's drawing
-  const response = await fetch("https://api.replicate.com/v1/predictions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Token ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      version: "cdda81e2bd1a78618ddc1fb5c6a3e2888a41023f49467dafeb589ea1de1d650c", // moondream2
-      input: {
-        image: `data:image/png;base64,${base64Image}`,
-        prompt: "Is this image a drawing or sketch made by a child on paper? Answer with YES or NO followed by a brief reason.",
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Replicate vision API error: ${response.status}`);
-  }
-
-  const prediction = await response.json();
+  // deno-lint-ignore no-explicit-any
+  const prediction: any = await createReplicatePrediction(
+    token,
+    "cdda81e2bd1a78618ddc1fb5c6a3e2888a41023f49467dafeb589ea1de1d650c", // moondream2
+    {
+      image: `data:image/png;base64,${base64Image}`,
+      prompt: "Is this image a drawing or sketch made by a child on paper? Answer with YES or NO followed by a brief reason.",
+    }
+  );
 
   // Poll for completion (vision models are fast, ~5s)
   let result = prediction;
@@ -427,25 +656,12 @@ async function validateDrawingWithVision(
 async function removeBackgroundReplicate(imageBytes: Uint8Array, token: string): Promise<Uint8Array> {
   const base64Image = base64Encode(imageBytes);
 
-  const response = await fetch("https://api.replicate.com/v1/predictions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Token ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      version: "fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003",
-      input: {
-        image: `data:image/png;base64,${base64Image}`,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Replicate API error: ${response.status}`);
-  }
-
-  const prediction = await response.json();
+  // deno-lint-ignore no-explicit-any
+  const prediction: any = await createReplicatePrediction(
+    token,
+    "fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003",
+    { image: `data:image/png;base64,${base64Image}` }
+  );
 
   // Poll for completion with timeout to avoid Edge Function timeout
   let result = prediction;
@@ -516,30 +732,20 @@ async function start3DGenerationAsync(
   console.log("Calling Replicate API for 3D generation...");
   console.log("Webhook URL:", webhookUrl);
 
-  const response = await fetch("https://api.replicate.com/v1/predictions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Token ${token}`,
-      "Content-Type": "application/json",
+  // deno-lint-ignore no-explicit-any
+  const prediction: any = await createReplicatePrediction(
+    token,
+    "ecd9d615e9efb7fd2a5e26bb51fc53e652b61ff7f5aac6bca7e16c2e4edba5f5", // TripoSR
+    {
+      image: `data:image/png;base64,${base64Image}`,
+      mc_resolution: 256,
+      foreground_ratio: 0.9,
     },
-    body: JSON.stringify({
-      version: "ecd9d615e9efb7fd2a5e26bb51fc53e652b61ff7f5aac6bca7e16c2e4edba5f5", // TripoSR
-      input: {
-        image: `data:image/png;base64,${base64Image}`,
-        mc_resolution: 256,
-        foreground_ratio: 0.9,
-      },
+    {
       webhook: webhookUrl,
       webhook_events_filter: ["completed"],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Replicate API error: ${response.status} - ${errorText}`);
-  }
-
-  const prediction = await response.json();
+    }
+  );
   console.log("Replicate prediction created:", prediction.id);
 
   // Store prediction mapping in ai_predictions table
@@ -596,4 +802,61 @@ async function generate3DRodin(
     .getPublicUrl(glbPath);
 
   return urlData.publicUrl;
+}
+
+// =========================================
+// CUPPY STYLIZATION (SDXL img2img)
+// =========================================
+
+async function stylizeWithFlux(imageBytes: Uint8Array, token: string): Promise<Uint8Array> {
+  const base64Image = base64Encode(imageBytes);
+
+  const STYLE_PROMPT = "A cute 3D toy character, claymation style, made of plasticine, play-doh texture, cute, puffy, volumetric, soft studio lighting, octane render, high quality, isometric view, smooth vinyl toy, tactile feeling, clean white background";
+
+  console.log("Starting SDXL img2img stylization...");
+
+  // deno-lint-ignore no-explicit-any
+  const prediction: any = await createReplicatePrediction(
+    token,
+    "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", // stability-ai/sdxl (supports img2img)
+    {
+      image: `data:image/png;base64,${base64Image}`,
+      prompt: STYLE_PROMPT,
+      negative_prompt: "ugly, blurry, low quality, deformed, text, watermark, realistic photo",
+      prompt_strength: 0.65,
+      num_inference_steps: 25,
+      guidance_scale: 7.5,
+      scheduler: "K_EULER",
+      disable_safety_checker: true,
+    }
+  );
+  console.log("SDXL prediction created:", prediction.id);
+
+  // Poll for completion (~10-20s for SDXL with 25 steps)
+  let result = prediction;
+  const maxWait = 30000;
+  const pollStart = Date.now();
+
+  while (result.status === "starting" || result.status === "processing") {
+    if (Date.now() - pollStart > maxWait) {
+      throw new Error("SDXL stylization timeout (30s)");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const statusResponse = await fetch(result.urls.get, {
+      headers: { "Authorization": `Token ${token}` },
+    });
+    result = await statusResponse.json();
+  }
+
+  if (result.status === "failed" || !result.output) {
+    throw new Error(`SDXL prediction failed: ${result.error || "no output"}`);
+  }
+
+  console.log("SDXL stylization completed successfully");
+
+  // SDXL returns an array of image URLs
+  const outputUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+  const imageResponse = await fetch(outputUrl);
+  const arrayBuffer = await imageResponse.arrayBuffer();
+  return new Uint8Array(arrayBuffer);
 }

@@ -67,7 +67,9 @@ class ViewerScreen extends ConsumerWidget {
     final processedImageUrl = drawing['processed_image_url'] as String?;
     final originalImageUrl = drawing['original_image_url'] as String?;
     final title = drawing['title'] as String? ?? 'My Drawing';
-    final status = drawing['model_status'] as String? ?? 'pending';
+    final rawStatus = drawing['model_status'] as String? ?? 'pending';
+    // A drawing is truly "completed" only with a 3D model
+    final status = (rawStatus == 'completed' && model3dUrl == null) ? 'draft' : rawStatus;
 
     return SingleChildScrollView(
       child: Column(
@@ -319,6 +321,11 @@ class ViewerScreen extends ConsumerWidget {
         color = AppTheme.errorColor;
         text = 'Failed';
         icon = Icons.error;
+        break;
+      case 'draft':
+        color = Colors.orange;
+        text = 'Solo 2D';
+        icon = Icons.image;
         break;
       default:
         color = Colors.grey;

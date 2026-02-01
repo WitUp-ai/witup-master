@@ -4,8 +4,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../camera/providers/camera_provider.dart';
+import '../../admin/providers/admin_provider.dart';
 
 /// Home screen - Main hub after authentication
 class HomeScreen extends ConsumerStatefulWidget {
@@ -26,7 +28,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_selectedIndex],
+      body: Stack(
+        children: [
+          _pages[_selectedIndex],
+          Positioned(
+            bottom: 4,
+            right: 8,
+            child: IgnorePointer(
+              child: Text(
+                'v${AppConfig.appVersion}+${AppConfig.appBuildNumber}',
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
+              ),
+            ),
+          ),
+        ],
+      ),
       // FAB Camera button - center prominent
       floatingActionButton: Container(
         width: 64,
@@ -144,6 +160,7 @@ class _HomeTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final userName = authState.user?.userMetadata?['name'] ?? 'Creative Maker';
+    final isAdmin = ref.watch(isAdminProvider);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -175,22 +192,157 @@ class _HomeTab extends ConsumerWidget {
                     .animate()
                     .slideX(begin: -0.3, duration: 500.ms)
                     .fadeIn(),
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.magicGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: AppTheme.shadowSmall,
-                  ),
-                  child: const Icon(
-                    Icons.notifications_outlined,
-                    color: Colors.white,
-                  ),
-                )
-                    .animate()
-                    .scale(delay: 300.ms, duration: 500.ms)
-                    .fadeIn(),
+                Row(
+                  children: [
+                    // Admin button (only for admins)
+                    isAdmin.when(
+                      data: (admin) => admin
+                          ? Container(
+                              width: 50,
+                              height: 50,
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: AppTheme.shadowSmall,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.admin_panel_settings,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                onPressed: () => context.go('/admin'),
+                                tooltip: 'Admin Panel',
+                              ),
+                            )
+                              .animate()
+                              .scale(delay: 200.ms, duration: 500.ms)
+                              .fadeIn()
+                          : const SizedBox.shrink(),
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                    // Profile menu with logout
+                    PopupMenuButton<String>(
+                      icon: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.magicGradient,
+                          shape: BoxShape.circle,
+                          boxShadow: AppTheme.shadowSmall,
+                        ),
+                        child: const Icon(
+                          Icons.person_outline,
+                          color: Colors.white,
+                        ),
+                      ).animate().scale(delay: 300.ms, duration: 500.ms).fadeIn(),
+                      offset: const Offset(0, 55),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                      ),
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          enabled: false,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                authState.user?.email ?? 'User',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                              const Divider(),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'profile',
+                          child: Row(
+                            children: [
+                              Icon(Icons.person, size: 20, color: AppTheme.textSecondary),
+                              SizedBox(width: 12),
+                              Text('Profilo'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'settings',
+                          child: Row(
+                            children: [
+                              Icon(Icons.settings, size: 20, color: AppTheme.textSecondary),
+                              SizedBox(width: 12),
+                              Text('Impostazioni'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem(
+                          value: 'logout',
+                          child: Row(
+                            children: [
+                              Icon(Icons.logout, size: 20, color: AppTheme.errorColor),
+                              SizedBox(width: 12),
+                              Text(
+                                'Logout',
+                                style: TextStyle(color: AppTheme.errorColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onSelected: (value) async {
+                        switch (value) {
+                          case 'profile':
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Profilo - In sviluppo')),
+                            );
+                            break;
+                          case 'settings':
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Impostazioni - In sviluppo')),
+                            );
+                            break;
+                          case 'logout':
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Conferma Logout'),
+                                content: const Text('Sei sicuro di voler uscire?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(ctx).pop(false),
+                                    child: const Text('Annulla'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(ctx).pop(true),
+                                    child: const Text(
+                                      'Esci',
+                                      style: TextStyle(color: AppTheme.errorColor),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true && context.mounted) {
+                              await ref.read(authProvider.notifier).signOut();
+                              if (context.mounted) {
+                                context.go('/login');
+                              }
+                            }
+                            break;
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ],
             ),
 
@@ -511,7 +663,10 @@ class _DrawingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final id = drawing['id'] as String;
     final title = drawing['title'] as String? ?? 'Untitled';
-    final status = drawing['model_status'] as String? ?? 'pending';
+    final rawStatus = drawing['model_status'] as String? ?? 'pending';
+    final has3dModel = drawing['model_3d_url'] != null;
+    // A drawing is truly "completed" only if it has a 3D model
+    final status = (rawStatus == 'completed' && !has3dModel) ? 'draft' : rawStatus;
     Color statusColor;
     IconData statusIcon;
     switch (status) {
@@ -520,12 +675,17 @@ class _DrawingCard extends StatelessWidget {
         statusIcon = Icons.check_circle;
         break;
       case 'processing':
+      case 'processing_3d':
         statusColor = AppTheme.accentColor;
         statusIcon = Icons.hourglass_empty;
         break;
       case 'failed':
         statusColor = AppTheme.errorColor;
         statusIcon = Icons.error;
+        break;
+      case 'draft':
+        statusColor = Colors.orange;
+        statusIcon = Icons.image;
         break;
       default:
         statusColor = Colors.grey;
@@ -534,9 +694,9 @@ class _DrawingCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        if (status == 'completed') {
+        if (status == 'completed' || status == 'draft') {
           context.push('/viewer/$id');
-        } else if (status == 'pending') {
+        } else if (status == 'processing' || status == 'processing_3d') {
           context.push('/processing/$id');
         }
       },

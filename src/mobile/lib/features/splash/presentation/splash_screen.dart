@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/config/app_config.dart';
 
 /// Splash Screen with magical loading animation
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
@@ -21,9 +22,19 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _navigateToNextScreen() async {
     await Future.delayed(AppConfig.splashDuration);
-    
-    if (mounted) {
-      // Router will handle navigation based on auth state
+
+    if (!mounted) return;
+
+    // Check if user is already authenticated
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+
+    if (user != null) {
+      // User is authenticated, let router handle redirect
+      // (will go to /home by default, or preserve deep link like /admin)
+      context.go('/home');
+    } else {
+      // Not authenticated, router will handle onboarding/login
       context.go('/onboarding');
     }
   }

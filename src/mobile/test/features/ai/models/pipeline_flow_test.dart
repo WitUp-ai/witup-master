@@ -6,12 +6,13 @@ import 'package:mobile_app/features/ai/services/ai_processing_service.dart';
 /// pending → processing → processing_3d → completed
 void main() {
   group('Pipeline flow: state transitions', () {
-    test('full pipeline: pending → uploading → validating → removing_bg → generating_3d → finalizing → waiting_3d → completed', () {
+    test('full pipeline: pending → uploading → validating → removing_bg → stylizing → generating_3d → finalizing → waiting_3d → completed', () {
       final states = [
         {'model_status': 'pending', 'processing_step': null},
         {'model_status': 'processing', 'processing_step': 'uploading'},
         {'model_status': 'processing', 'processing_step': 'validating'},
         {'model_status': 'processing', 'processing_step': 'removing_background'},
+        {'model_status': 'processing', 'processing_step': 'stylizing'},
         {'model_status': 'processing', 'processing_step': 'generating_3d'},
         {'model_status': 'processing', 'processing_step': 'finalizing'},
         {'model_status': 'processing_3d', 'processing_step': 'waiting_3d'},

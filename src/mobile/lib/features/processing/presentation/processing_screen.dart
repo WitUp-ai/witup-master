@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/services/debug_log_service.dart';
 import '../../ai/providers/ai_processing_provider.dart';
 import '../../ai/services/ai_processing_service.dart';
@@ -140,7 +141,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           icon: const Icon(Icons.close),
           onPressed: () => context.go('/home'),
         ),
-        title: const Text('Creazione in Corso'),
+        title: Text('Creazione in Corso  v${AppConfig.appVersion}'),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -154,6 +155,14 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
             // If 3D just completed and we were in phase2, deactivate countdown
             if (status.isCompleted && _phase2Active) {
               _phase2Active = false;
+            }
+
+            // Auto-activate phase 2 when DB shows processing_3d/waiting_3d
+            if (!_phase2Active && status.isProcessing3D && status.displayImageUrl != null) {
+              _conceptUrl ??= status.displayImageUrl;
+              _phase2Active = true;
+              _countdownStart ??= DateTime.now();
+              _startCountdown();
             }
 
             if (status.isCompleted) {
@@ -365,6 +374,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
       _PipelineStep('Caricamento', 'uploading', Icons.cloud_upload),
       _PipelineStep('Validazione AI', 'validating', Icons.psychology),
       _PipelineStep('Rimozione sfondo', 'removing_background', Icons.auto_fix_high),
+      _PipelineStep('Stile Cuppy', 'stylizing', Icons.palette),
       _PipelineStep('Generazione 3D', 'generating_3d', Icons.view_in_ar),
       _PipelineStep('Finalizzazione', 'finalizing', Icons.check_circle_outline),
     ];
@@ -538,7 +548,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
 
   /// Determine step state: done, active, or pending
   _StepState _getStepState(String stepKey, DrawingStatus status) {
-    const order = ['uploading', 'validating', 'removing_background', 'generating_3d', 'finalizing'];
+    const order = ['uploading', 'validating', 'removing_background', 'stylizing', 'generating_3d', 'finalizing', 'waiting_3d'];
     final currentStep = status.processingStep;
 
     if (status.isCompleted) return _StepState.done;
@@ -726,6 +736,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
         error.contains('does not appear to be a drawing');
     final isConfigError = error.contains('api_config_missing') ||
         error.contains('API configuration');
+    final isBillingError = error.contains('billing_error') ||
+        error.contains('Credito Replicate') ||
+        error.contains('Insufficient credit');
 
     final String title;
     final IconData icon;
@@ -742,6 +755,11 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
       icon = Icons.settings_suggest;
       color = Colors.orange;
       message = 'Il token REPLICATE_API_TOKEN non è configurato. Aggiungilo alla tabella system_config su Supabase.';
+    } else if (isBillingError) {
+      title = 'Credito AI Esaurito';
+      icon = Icons.account_balance_wallet;
+      color = Colors.deepOrange;
+      message = 'Il credito Replicate è esaurito. Ricarica su replicate.com/account/billing per continuare.';
     } else {
       title = 'Errore di Elaborazione';
       icon = Icons.error_outline;

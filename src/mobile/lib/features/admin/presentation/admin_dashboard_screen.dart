@@ -18,7 +18,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -72,6 +72,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
                 Tab(icon: Icon(Icons.people), text: 'Utenti'),
                 Tab(icon: Icon(Icons.brush), text: 'Drawings'),
                 Tab(icon: Icon(Icons.api), text: 'API & Config'),
+                Tab(icon: Icon(Icons.attach_money), text: 'Costi'),
               ],
             ),
           ),
@@ -82,6 +83,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
               _UsersTab(),
               _DrawingsTab(),
               _SystemConfigTab(),
+              _CostIntelligenceTab(),
             ],
           ),
         );
@@ -253,7 +255,7 @@ class _OverviewTab extends ConsumerWidget {
 // ─── USERS TAB ────────────────────────────────────────
 
 bool _isAdminEmail(String? email) =>
-    const ['giovanni@witup.ai', 'testuser@gmail.com'].contains(email);
+    const ['giovanni.sapere@witup.ai', 'testuser@gmail.com'].contains(email);
 
 class _UsersTab extends ConsumerWidget {
   const _UsersTab();
@@ -711,6 +713,7 @@ class _SystemConfigCard extends StatelessWidget {
                 PopupMenuButton(
                   itemBuilder: (context) => [
                     PopupMenuItem(
+                      onTap: onEdit,
                       child: const Row(
                         children: [
                           Icon(Icons.edit, size: 18),
@@ -718,9 +721,9 @@ class _SystemConfigCard extends StatelessWidget {
                           Text('Modifica'),
                         ],
                       ),
-                      onTap: onEdit,
                     ),
                     PopupMenuItem(
+                      onTap: onDelete,
                       child: Row(
                         children: [
                           Icon(Icons.delete, size: 18, color: AppTheme.errorColor),
@@ -731,7 +734,6 @@ class _SystemConfigCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      onTap: onDelete,
                     ),
                   ],
                 ),
@@ -914,6 +916,314 @@ class Clipboard {
 class ClipboardData {
   final String text;
   const ClipboardData({required this.text});
+}
+
+// ─── COST INTELLIGENCE TAB ────────────────────────────────────────
+
+class _CostIntelligenceTab extends ConsumerWidget {
+  const _CostIntelligenceTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(costSummaryProvider);
+    final logs = ref.watch(usageLogsProvider);
+
+    return summary.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Errore: $e')),
+      data: (cost) => RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(costSummaryProvider);
+          ref.invalidate(usageLogsProvider);
+        },
+        child: ListView(
+          padding: const EdgeInsets.all(AppTheme.spaceM),
+          children: [
+            Text(
+              'Cost Intelligence',
+              style: GoogleFonts.poppins(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Monitoraggio costi AI in tempo reale',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppTheme.spaceM),
+
+            // Budget progress
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spaceM),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                boxShadow: AppTheme.shadowSmall,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet,
+                          color: cost.totalCostMonth > cost.monthlyLimit * 0.8
+                              ? AppTheme.errorColor
+                              : AppTheme.primaryColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Budget Mensile',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: cost.monthlyLimit > 0
+                          ? (cost.totalCostMonth / cost.monthlyLimit).clamp(0.0, 1.0)
+                          : 0,
+                      minHeight: 12,
+                      backgroundColor: AppTheme.textTertiary.withValues(alpha: 0.2),
+                      valueColor: AlwaysStoppedAnimation(
+                        cost.totalCostMonth > cost.monthlyLimit * 0.8
+                            ? AppTheme.errorColor
+                            : cost.totalCostMonth > cost.monthlyLimit * 0.5
+                                ? AppTheme.warningColor
+                                : AppTheme.successColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '\$${cost.totalCostMonth.toStringAsFixed(4)} / \$${cost.monthlyLimit.toStringAsFixed(2)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: AppTheme.spaceM),
+
+            // Stats grid
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.5,
+              children: [
+                _StatCard(
+                  title: 'Costo Oggi',
+                  value: '\$${cost.totalCostToday.toStringAsFixed(4)}',
+                  icon: Icons.today,
+                  color: AppTheme.primaryColor,
+                ),
+                _StatCard(
+                  title: 'Costo Mese',
+                  value: '\$${cost.totalCostMonth.toStringAsFixed(4)}',
+                  icon: Icons.calendar_month,
+                  color: AppTheme.accentColor,
+                ),
+                _StatCard(
+                  title: 'Chiamate Oggi',
+                  value: '${cost.totalCallsToday}',
+                  icon: Icons.api,
+                  color: AppTheme.successColor,
+                ),
+                _StatCard(
+                  title: 'Errori Oggi',
+                  value: '${cost.errorsToday}',
+                  icon: Icons.error_outline,
+                  color: cost.errorsToday > 0 ? AppTheme.errorColor : AppTheme.textSecondary,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppTheme.spaceL),
+
+            // Cost by provider
+            if (cost.costByProvider.isNotEmpty) ...[
+              Text(
+                'Costo per Provider',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...cost.costByProvider.entries.map((entry) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      boxShadow: AppTheme.shadowSmall,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.cloud, color: AppTheme.primaryColor, size: 20),
+                        const SizedBox(width: 12),
+                        Text(
+                          entry.key,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '\$${entry.value.toStringAsFixed(4)}',
+                          style: GoogleFonts.robotoMono(
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+              const SizedBox(height: AppTheme.spaceM),
+            ],
+
+            // Calls by operation
+            if (cost.callsByOperation.isNotEmpty) ...[
+              Text(
+                'Chiamate per Operazione',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...cost.callsByOperation.entries.map((entry) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      boxShadow: AppTheme.shadowSmall,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.functions, color: AppTheme.accentColor, size: 20),
+                        const SizedBox(width: 12),
+                        Text(
+                          entry.key,
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${entry.value}x',
+                          style: GoogleFonts.robotoMono(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  )),
+              const SizedBox(height: AppTheme.spaceM),
+            ],
+
+            // Recent logs
+            Text(
+              'Log Recenti',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            logs.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Text('Errore caricamento log: $e'),
+              data: (logList) {
+                if (logList.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(AppTheme.spaceL),
+                    decoration: BoxDecoration(
+                      color: AppTheme.backgroundSecondary,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.inbox, size: 48, color: AppTheme.textTertiary),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Nessun log di utilizzo ancora.',
+                          style: GoogleFonts.poppins(color: AppTheme.textSecondary),
+                        ),
+                        Text(
+                          'I log appariranno dopo la prima elaborazione AI.',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: AppTheme.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return Column(
+                  children: logList.take(20).map((log) => Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: Icon(
+                            log.status == 'success' ? Icons.check_circle : Icons.error,
+                            color: log.status == 'success'
+                                ? AppTheme.successColor
+                                : AppTheme.errorColor,
+                            size: 20,
+                          ),
+                          title: Text(
+                            '${log.provider} / ${log.model ?? log.operation ?? "?"}',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${log.operation ?? ""} - ${log.latencyMs ?? 0}ms',
+                            style: GoogleFonts.poppins(fontSize: 11),
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '\$${(log.costEstimated ?? 0).toStringAsFixed(4)}',
+                                style: GoogleFonts.robotoMono(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ),
+                              Text(
+                                '${log.createdAt.hour}:${log.createdAt.minute.toString().padLeft(2, '0')}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  color: AppTheme.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── WIDGETS ────────────────────────────────────────

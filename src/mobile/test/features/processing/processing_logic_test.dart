@@ -18,8 +18,12 @@ void main() {
       expect(makeStatus(step: 'validating').progressPercent, 0.25);
     });
 
-    test('removing_background = 45%', () {
-      expect(makeStatus(step: 'removing_background').progressPercent, 0.45);
+    test('removing_background = 35%', () {
+      expect(makeStatus(step: 'removing_background').progressPercent, 0.35);
+    });
+
+    test('stylizing = 55%', () {
+      expect(makeStatus(step: 'stylizing').progressPercent, 0.55);
     });
 
     test('generating_3d = 65%', () {
@@ -69,6 +73,10 @@ void main() {
 
     test('removing_background label', () {
       expect(makeStatus(step: 'removing_background').stepLabel, 'Rimozione sfondo...');
+    });
+
+    test('stylizing label', () {
+      expect(makeStatus(step: 'stylizing').stepLabel, 'Trasformazione stile Cuppy...');
     });
 
     test('generating_3d label', () {

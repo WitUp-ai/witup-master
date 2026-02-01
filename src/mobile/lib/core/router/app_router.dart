@@ -34,11 +34,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Debug log
       debugPrint('Router redirect: path=$path, isAuthenticated=$isAuthenticated, isFirstTime=$isFirstTime');
 
-      // If on splash, let it load
-      if (path == '/splash') return null;
 
-      // If authenticated, redirect to home from auth pages
+      // If on splash, let it load (but don't redirect away from deep links)
+      if (path == '/splash') {
+        // Only stay on splash if no specific route was requested
+        return null;
+      }
+
+      // If authenticated, redirect to home from auth pages (unless admin was requested)
       if (isAuthenticated && (path == '/login' || path == '/signup' || path == '/onboarding')) {
+        // Don't redirect if coming from a deep link
         return '/home';
       }
 
@@ -50,21 +55,22 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // If not authenticated and trying to access protected route
       if (!isAuthenticated && isProtectedRoute) {
+        // Store the intended destination
         // First time: show onboarding
         if (isFirstTime) {
           return '/onboarding';
         }
-        // Not first time: show login
+        // Not first time: show login (they'll be redirected after login)
         return '/login';
       }
 
       // If not authenticated on public routes
       if (!isAuthenticated) {
-        // First time: show onboarding
+        // First time: show onboarding (unless already there)
         if (isFirstTime && path != '/onboarding') {
           return '/onboarding';
         }
-        // Not first time: allow login or signup
+        // Not first time: require login (unless on login/signup)
         if (!isFirstTime && path != '/login' && path != '/signup') {
           return '/login';
         }

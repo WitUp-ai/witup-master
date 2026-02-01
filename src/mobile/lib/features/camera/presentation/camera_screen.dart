@@ -113,14 +113,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           // Navigate to processing screen with the drawing ID
           context.go('/processing/$drawingId');
         } else {
-          // Fallback: show success and go home
+          // This should not happen if upload succeeded, but handle gracefully
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Drawing captured! Processing magic... ✨'),
-              backgroundColor: AppTheme.successColor,
+              content: Text('Drawing uploaded but could not get ID. Please try again.'),
+              backgroundColor: AppTheme.errorColor,
             ),
           );
-          context.go('/home');
+          // Do NOT navigate to home - stay on camera screen
         }
       }
     } catch (e) {
@@ -132,6 +132,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           ),
         );
       }
+      // Do NOT reset _isProcessing here - let finally block handle it
+      // but we should NOT navigate anywhere
     } finally {
       if (mounted) {
         setState(() {

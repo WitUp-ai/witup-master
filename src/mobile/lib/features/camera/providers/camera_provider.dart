@@ -60,6 +60,14 @@ class CameraNotifier extends StateNotifier<CameraState> {
       _debug.log('Upload', 'Starting upload: ${imageFile.name} (${(imageBytes.length / 1024).toStringAsFixed(1)} KB)');
       state = state.copyWith(isUploading: true, error: null, uploadProgress: 0);
 
+      // CRITICAL: Refresh session to ensure valid token before upload
+      try {
+        await _supabase.auth.refreshSession();
+        _debug.log('Auth', 'Session refreshed before upload');
+      } catch (e) {
+        _debug.warning('Auth', 'Session refresh failed, continuing anyway: $e');
+      }
+
       // Get current user - must be authenticated
       final authState = _ref.read(authProvider);
       final userId = authState.user?.id;

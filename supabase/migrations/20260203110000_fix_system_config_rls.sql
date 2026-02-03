@@ -1,5 +1,6 @@
 -- Fix RLS policies for system_config table
 -- Edge Functions need to read API keys from this table
+-- Trigger: 2026-02-03 11:05
 
 -- Drop existing restrictive policy
 DROP POLICY IF EXISTS "service_role_all_system_config" ON public.system_config;

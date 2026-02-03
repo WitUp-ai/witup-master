@@ -13,11 +13,28 @@
 - Se la richiesta dell'utente contraddice l'architettura, segnalalo: "Questo viola le specifiche in [file]. Procedo comunque o aggiorniamo le specifiche?".
 - Se correggi un bug, assicurati di non rompere la struttura esistente (es. non hardcodare chiavi se l'architettura dice di usare `system_config`).
 
-## 3. 🧠 RUOLI
+## 3. ⚡ SUPABASE CLI PROTOCOL (Authorized)
+Ora hai accesso alla `supabase` CLI tramite il terminale dell'host.
+1.  **Assumption:** Assumi che l'ambiente sia già loggato (`supabase login` già fatto dall'umano). NON provare mai a fare login o init da solo.
+2.  **Deploy Functions:** Per aggiornare il backend, usa ESCLUSIVAMENTE:
+    `supabase functions deploy [nome-funzione] --no-verify-jwt`
+3.  **Database Migration:**
+    - Prima opzione: Usa `supabase db push` per sincronizzare le migrazioni locali col cloud.
+    - Se fallisce (per permessi docker/db): Usa il metodo "Node.js Direct Connection" (fallback).
+4.  **Integration:** Quando crei nuove funzioni, non chiedere "vuoi deployare?". Esegui il comando di deploy e verifica l'output.
+
+## 4. 🧠 RALPH'S CHECKLIST (Architecture)
+Ogni volta che scrivi codice Backend/DB:
+- [ ] Ho creato la migrazione SQL in `supabase/migrations`?
+- [ ] Ho pushato la modifica al DB (`supabase db push`)?
+- [ ] Ho deployato la funzione aggiornata (`supabase functions deploy`)?
+- [ ] Ho verificato che `system_config` abbia le chiavi necessarie?
+
+## 5. 🧠 RUOLI
 - **User (Human):** Definisce l'obiettivo ("Voglio il sistema di crediti").
 - **Cline (AI):** Esegue l'implementazione completa (DB -> Backend -> Frontend).
 - **Output:** Non rispondere con liste di cose che *io* devo fare. Rispondi con "Fatto X, Y e Z. Il sistema è pronto."
 
-## 4. 📝 CONTEXT AWARENESS
+## 6. 📝 CONTEXT AWARENESS
 - Mantieni sempre aggiornato il file `.spec/progress.md` (se esiste) o crea un log delle tue azioni.
 - Non dimenticare i file creati 3 messaggi fa.

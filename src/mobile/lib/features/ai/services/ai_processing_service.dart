@@ -56,30 +56,40 @@ class AIProcessingService {
 
   /// Call Edge Function for AI processing (required — no fallback)
   Future<ProcessingResult> _tryEdgeFunction(String drawingId, String userId) async {
-    // Refresh session to ensure token is valid
-    try {
-      await _supabase.auth.refreshSession();
-      _debug.log('Auth', 'Session refreshed successfully');
-    } catch (e) {
-      _debug.warning('Auth', 'Failed to refresh session: $e');
+    // Check if token is expired and refresh if needed
+    final currentSession = _supabase.auth.currentSession;
+    if (currentSession != null) {
+      final expiresAt = currentSession.expiresAt;
+      if (expiresAt != null) {
+        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        final isExpired = now >= expiresAt;
+
+        _debug.log('Auth', 'Token check - expires: $expiresAt, now: $now, expired: $isExpired');
+
+        // Only refresh if actually expired
+        if (isExpired) {
+          _debug.warning('Auth', 'Token expired, refreshing...');
+          try {
+            await _supabase.auth.refreshSession();
+            _debug.success('Auth', 'Token refreshed successfully');
+          } catch (e) {
+            _debug.error('Auth', 'Token refresh failed', error: e);
+          }
+        }
+      }
     }
 
-    final accessToken = _supabase.auth.currentSession?.accessToken;
-    if (accessToken == null) {
-      throw Exception('Errore Autenticazione: Sessione non valida. Effettua nuovamente il login.');
-    }
     if (_supabaseUrl.isEmpty) {
       throw Exception('Errore Configurazione: URL Supabase non configurato.');
     }
 
-    _debug.log('Auth', 'Using access token: ${accessToken.substring(0, 20)}...');
+    _debug.log('Auth', 'Calling Edge Function with anon key (no user JWT needed)');
 
     final response = await http.post(
       Uri.parse('$_supabaseUrl/functions/v1/process-drawing'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $accessToken',
-        'apikey': _anonKey,
+        'Authorization': 'Bearer $_anonKey',
       },
       body: jsonEncode({
         'drawing_id': drawingId,
@@ -104,10 +114,17 @@ class AIProcessingService {
 
       _debug.success('EdgeFunction', 'Parsed response', data: {
         'success': data['success'],
+        'processed_image_url': data['processed_image_url'],
+        'concept_url': data['concept_url'],
         'has_processed_image': data['processed_image_url'] != null,
+        'has_concept': data['concept_url'] != null,
         'has_3d_model': data['model_3d_url'] != null,
         'processing_time_ms': data['processing_time_ms'],
+        'fn_version': data['fn_version'],
       });
+
+      _debug.log('EdgeFunction', 'Full response body: ${response.body}');
+
       return ProcessingResult.fromJson(data);
     }
 
@@ -133,7 +150,7 @@ class AIProcessingService {
     try {
       final response = await _supabase
           .from('drawings')
-          .select('model_status, processing_step, processed_image_url, model_3d_url, processing_error, original_image_url')
+          .select('model_status, processing_step, processed_image_url, model_3d_url, processing_error, original_image_url, thumbnail_url')
           .eq('id', drawingId)
           .single();
 
@@ -196,6 +213,7 @@ class DrawingStatus {
   final String? processedImageUrl;
   final String? model3dUrl;
   final String? originalImageUrl;
+  final String? thumbnailUrl;
   final String? error;
 
   DrawingStatus({
@@ -204,6 +222,7 @@ class DrawingStatus {
     this.processedImageUrl,
     this.model3dUrl,
     this.originalImageUrl,
+    this.thumbnailUrl,
     this.error,
   });
 
@@ -213,8 +232,8 @@ class DrawingStatus {
   bool get isCompleted => status == 'completed';
   bool get isFailed => status == 'failed';
 
-  /// Get the best available image URL
-  String? get displayImageUrl => processedImageUrl ?? originalImageUrl;
+  /// Get the best available image URL (use processed, then thumbnail, then original)
+  String? get displayImageUrl => processedImageUrl ?? thumbnailUrl ?? originalImageUrl;
 
   /// Get progress percentage (0.0 - 1.0) based on processing step
   double get progressPercent {
@@ -273,6 +292,7 @@ class DrawingStatus {
       processedImageUrl: json['processed_image_url'],
       model3dUrl: json['model_3d_url'],
       originalImageUrl: json['original_image_url'],
+      thumbnailUrl: json['thumbnail_url'],
       error: json['processing_error'],
     );
   }

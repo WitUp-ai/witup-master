@@ -647,8 +647,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
 
           const SizedBox(height: AppTheme.spaceXL),
 
-          // Processed image preview
-          if (status.displayImageUrl != null) ...[
+          // Processed image preview - Use thumbnail as fallback if processed_image_url is null
+          if (status.displayImageUrl != null || status.thumbnailUrl != null) ...[
             const Text(
               'Il tuo disegno elaborato:',
               style: TextStyle(fontWeight: FontWeight.w500),
@@ -661,7 +661,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.network(
-                status.displayImageUrl!,
+                status.displayImageUrl ?? status.thumbnailUrl!,
                 height: 250,
                 fit: BoxFit.contain,
                 loadingBuilder: (context, child, progress) {

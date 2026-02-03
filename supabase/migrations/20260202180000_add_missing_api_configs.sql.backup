@@ -1,0 +1,99 @@
+-- ============================================================================
+-- ADD MISSING API CONFIGURATIONS
+-- ============================================================================
+-- Date: 2026-02-02
+-- Description: Add missing API configurations for AI providers and 3D rendering
+-- ============================================================================
+
+-- First, ensure system_config table has is_secret column (if not already)
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' 
+                   AND table_name = 'system_config' 
+                   AND column_name = 'is_secret') THEN
+        ALTER TABLE public.system_config ADD COLUMN is_secret BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
+-- Insert missing AI provider configurations
+INSERT INTO public.system_config (key, value, description, is_secret) VALUES
+('OPENAI_API_KEY', 'TBD_OPENAI_KEY', 'API Key per OpenAI GPT-4o Vision & DALL-E 3', true),
+('NANOBANANA_API_KEY', 'TBD_NANOBANANA_KEY', 'API Key per Nanobanana (3D Generation)', true),
+('TRIPOSR_API_KEY', 'TBD_TRIPOSR_KEY', 'API Key per TripoSR (3D Reconstruction)', true),
+('MESHY_API_KEY', 'TBD_MESHY_KEY', 'API Key per Meshy AI (3D Generation)', true),
+('GPT_VISION_PROMPT', 'Is this image a child''s drawing or sketch on paper? Answer only "yes" or "no".', 'Prompt per validazione disegni con GPT Vision', false),
+('DEFAULT_AI_PROVIDER', 'replicate', 'Provider AI predefinito per elaborazione', false),
+('AI_FALLBACK_PROVIDER', 'openai', 'Provider AI di fallback se default non disponibile', false),
+('DAILY_SPEND_LIMIT', '5.0', 'Limite spesa giornaliero AI in USD', false),
+('ENABLE_3D_GENERATION', 'true', 'Abilita generazione 3D automatica', false),
+('MIN_DRAWING_QUALITY_SCORE', '0.3', 'Soglia minima qualità disegno per procedere (0.0-1.0)', false),
+('MAX_DAILY_DRAWINGS_PER_USER', '20', 'Numero massimo di disegni giornalieri per utente', false),
+('AUTO_PROCESS_NEW_DRAWINGS', 'true', 'Elabora automaticamente nuovi disegni', false),
+('REPLICATE_MODEL_VISION', 'moondream2', 'Modello Replicate per visione (moondream2, etc.)', false),
+('REPLICATE_MODEL_3D', 'triposr', 'Modello Replicate per 3D (triposr, etc.)', false),
+('OPENAI_VISION_MODEL', 'gpt-4o-mini', 'Modello OpenAI per visione (gpt-4o-mini, gpt-4o)', false),
+('3D_RENDERING_QUALITY', 'medium', 'Qualità rendering 3D (low, medium, high)', false)
+ON CONFLICT (key) DO UPDATE SET
+    value = EXCLUDED.value,
+    description = EXCLUDED.description,
+    is_secret = EXCLUDED.is_secret,
+    updated_at = NOW();
+
+-- Add column for processing_step to drawings table if not exists
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' 
+                   AND table_name = 'drawings' 
+                   AND column_name = 'processing_step') THEN
+        ALTER TABLE public.drawings ADD COLUMN processing_step TEXT;
+        ALTER TABLE public.drawings ADD COLUMN processing_progress INTEGER DEFAULT 0;
+        
+        COMMENT ON COLUMN public.drawings.processing_step IS 'Current step in processing pipeline: uploading, validating, removing_background, stylizing, generating_3d, finalizing';
+        COMMENT ON COLUMN public.drawings.processing_progress IS 'Progress percentage 0-100 for current step';
+    END IF;
+END $$;
+
+-- Update existing drawings with processing_step based on model_status
+UPDATE public.drawings 
+SET processing_step = 
+    CASE 
+        WHEN model_status = 'pending' THEN 'uploading'
+        WHEN model_status = 'processing' THEN 'validating'
+        WHEN model_status = 'completed' THEN 'done'
+        WHEN model_status = 'failed' THEN 'error'
+        ELSE 'unknown'
+    END
+WHERE processing_step IS NULL;
+
+-- Create index for faster status queries
+CREATE INDEX IF NOT EXISTS idx_drawings_processing_step ON public.drawings(processing_step);
+
+-- Add view for admin dashboard to see missing API configurations
+CREATE OR REPLACE VIEW public.admin_missing_configs AS
+SELECT 
+    'API_KEY_MISSING' as issue_type,
+    key,
+    description,
+    CASE 
+        WHEN value LIKE 'TBD_%' OR value = '' THEN 'MISSING'
+        ELSE 'CONFIGURED'
+    END as status
+FROM public.system_config 
+WHERE is_secret = true 
+AND (value LIKE 'TBD_%' OR value = '');
+
+-- Log the migration
+INSERT INTO public.admin_activity_logs (admin_user_id, action, target_table, new_values)
+SELECT 
+    '00000000-0000-0000-0000-000000000000'::uuid,
+    'migration_applied',
+    'system_config',
+    jsonb_build_object(
+        'migration', '20260202180000_add_missing_api_configs',
+        'configs_added', (SELECT COUNT(*) FROM public.system_config WHERE key LIKE ANY(ARRAY['OPENAI%', 'NANOBANANA%', 'TRIPOSR%', 'MESHY%', 'GPT_VISION%', 'DEFAULT_AI%', 'AI_FALLBACK%', 'DAILY_SPEND%', 'ENABLE_3D%', 'MIN_DRAWING%']))
+    )
+WHERE EXISTS (SELECT 1 FROM public.users LIMIT 1);
+
+-- ============================================================================
+-- Migration applied successfully
+-- ============================================================================

@@ -169,4 +169,4 @@ END $$;
 -- =====================================================
 COMMENT ON TABLE public.drawings IS 'User-uploaded drawings and their 3D models - Emergency camera fix';
 COMMENT ON COLUMN public.drawings.processing_step IS 'Current step in processing pipeline: uploading, validating, removing_background, stylizing, generating_3d, finalizing';
-COMMENT ON COLUMN public.drawings.processing_progress IS 'Progress percentage 0-100 for current step';
+-- COMMENT ON COLUMN public.drawings.processing_progress IS 'Progress percentage 0-100 for current step'; -- Removed because column might not exist yet

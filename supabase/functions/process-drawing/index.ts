@@ -515,59 +515,79 @@ serve(async (req) => {
     }
 
     // =========================================
-    // STEP 3: CRITICAL DB UPDATE (before thumbnail — must not be blocked)
-    // =========================================
-    const processingTimeMs = Date.now() - startTime;
-    const finalStatus = has3DPending && !model3dUrl ? "processing_3d" : "completed";
-    const conceptUrl = stylizedImageUrl || processedImageUrl || null;
-
-    console.log(`Setting drawing status to: ${finalStatus}, concept: ${conceptUrl ? "YES" : "NO"}`);
-
-    const updateData: Record<string, unknown> = {
-      model_status: finalStatus,
-      processing_step: has3DPending ? "waiting_3d" : "done",
-    };
-
-    if (finalStatus === "completed") {
-      updateData.processing_completed_at = new Date().toISOString();
-    }
-    if (processedImageUrl) {
-      updateData.processed_image_url = processedImageUrl;
-    }
-    if (model3dUrl) {
-      updateData.model_3d_url = model3dUrl;
-    }
-
-    await supabase
-      .from("drawings")
-      .update(updateData)
-      .eq("id", drawing_id);
-
-    console.log("Critical DB update done — UI should transition now");
-
-    // =========================================
-    // STEP 4: THUMBNAIL (non-critical, best-effort)
+    // STEP 4: THUMBNAIL (moved before DB update for fallback)
     // =========================================
     try {
       const thumbBytes = processedImageBytes || imageBytes;
       const thumbPath = `${drawing_id}/thumbnail.png`;
-      await supabase.storage
+      const { error: thumbUploadError } = await supabase.storage
         .from("models-thumbnails")
         .upload(thumbPath, thumbBytes, {
           contentType: "image/png",
           upsert: true,
         });
-      const { data: thumbUrlData } = supabase.storage
-        .from("models-thumbnails")
-        .getPublicUrl(thumbPath);
-      thumbnailUrl = thumbUrlData.publicUrl;
-
-      if (thumbnailUrl) {
-        await supabase.from("drawings").update({ thumbnail_url: thumbnailUrl }).eq("id", drawing_id);
+      
+      if (!thumbUploadError) {
+        const { data: thumbUrlData } = supabase.storage
+          .from("models-thumbnails")
+          .getPublicUrl(thumbPath);
+        thumbnailUrl = thumbUrlData.publicUrl;
       }
     } catch (thumbError) {
       console.error("Thumbnail upload failed (non-critical):", thumbError);
     }
+
+    // =========================================
+    // STEP 3: CRITICAL DB UPDATE
+    // =========================================
+    const processingTimeMs = Date.now() - startTime;
+    const finalStatus = has3DPending && !model3dUrl ? "processing_3d" : "completed";
+    
+    // FALLBACK LOGIC: Ensure we always have a displayable image URL
+    // Priority: Stylized > Processed (No BG) > Thumbnail > Original
+    const bestDisplayUrl = stylizedImageUrl || processedImageUrl || thumbnailUrl || drawing.original_image_url;
+    
+    // If we have a stylized image but no processed image (weird case), use stylized as processed
+    if (!processedImageUrl && stylizedImageUrl) {
+      processedImageUrl = stylizedImageUrl;
+    }
+    
+    const conceptUrl = stylizedImageUrl || processedImageUrl || null;
+
+    console.log(`Setting drawing status to: ${finalStatus}`);
+    console.log(`- Concept URL: ${conceptUrl ? "YES" : "NO"}`);
+    console.log(`- Best Display URL: ${bestDisplayUrl ? "YES" : "NO"}`);
+
+    const updateData: Record<string, unknown> = {
+      model_status: finalStatus,
+      processing_step: has3DPending ? "waiting_3d" : "done",
+      // Always ensure processed_image_url has a value for the frontend to display
+      processed_image_url: processedImageUrl || bestDisplayUrl,
+      thumbnail_url: thumbnailUrl
+    };
+
+    if (finalStatus === "completed") {
+      updateData.processing_completed_at = new Date().toISOString();
+    }
+    
+    // Optional fields
+    if (model3dUrl) updateData.model_3d_url = model3dUrl;
+    if (stylizedImageUrl) updateData['stylized_image_url'] = stylizedImageUrl; // Try to save if column exists
+
+    // Perform the update
+    const { error: updateError } = await supabase
+      .from("drawings")
+      .update(updateData)
+      .eq("id", drawing_id);
+
+    if (updateError) {
+      console.warn("Update failed, retrying without optional columns...", updateError.message);
+      // Fallback update if 'stylized_image_url' column doesn't exist
+      delete updateData['stylized_image_url'];
+      await supabase.from("drawings").update(updateData).eq("id", drawing_id);
+    }
+
+    console.log("Critical DB update done — UI should transition now");
 
     // =========================================
     // STEP 5: NOTIFICATION (non-critical, best-effort)
@@ -592,7 +612,7 @@ serve(async (req) => {
     const result: ProcessingResult & { fn_version?: string } = {
       success: true,
       fn_version: FUNCTION_VERSION,
-      processed_image_url: processedImageUrl || undefined,
+      processed_image_url: processedImageUrl || bestDisplayUrl || undefined,
       concept_url: conceptUrl || undefined,
       model_3d_url: model3dUrl || undefined,
       thumbnail_url: thumbnailUrl || undefined,

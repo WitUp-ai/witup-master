@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -79,28 +81,38 @@ class CameraNotifier extends StateNotifier<CameraState> {
 
       state = state.copyWith(uploadProgress: 0.3);
 
-      // Upload to Supabase Storage (drawings-original bucket - private)
-      await _supabase.storage
-          .from('drawings-original')
-          .uploadBinary(
-            storagePath,
-            imageBytes,
-            fileOptions: FileOptions(
-              contentType: 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-              upsert: true,
-            ),
-          );
+      // Use Edge Function for upload to ensure RLS bypass if needed
+      // This is more robust than direct storage upload which requires perfect RLS policies
+      final session = _supabase.auth.currentSession;
+      if (session == null) throw Exception('No active session');
 
-      _debug.success('Upload', 'Storage upload complete: $storagePath');
+      final functionUrl = '${_supabase.rest.url.toString().replaceAll('/rest/v1', '')}/functions/v1/upload-drawing';
+      
+      _debug.log('Upload', 'Uploading via Edge Function: $functionUrl');
+
+      final response = await http.post(
+        Uri.parse(functionUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+        body: jsonEncode({
+          'image_base64': base64Encode(imageBytes),
+          'file_name': fileName,
+          'content_type': 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Upload failed: ${response.statusCode} - ${response.body}');
+      }
+
+      final responseData = jsonDecode(response.body);
+      _debug.success('Upload', 'Storage upload complete via Edge Function: $storagePath');
       state = state.copyWith(uploadProgress: 0.7);
 
-      // Get signed URL for private bucket (valid for 1 hour)
-      final signedUrl = await _supabase.storage
-          .from('drawings-original')
-          .createSignedUrl(storagePath, 3600);
-
-      // Storage path is the URL reference for database
-      final publicUrl = signedUrl;
+      // Use the URL returned by the function (it includes a signed token)
+      final publicUrl = responseData['public_url'] as String;
 
       _debug.success('Upload', 'Signed URL created');
       state = state.copyWith(uploadProgress: 0.9);

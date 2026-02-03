@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
-const FUNCTION_VERSION = "2026-02-03-v8-token-fix";
+const FUNCTION_VERSION = "2026-02-03-v9-debug";
 
 /** Log an AI operation to usage_logs for cost tracking */
 async function logUsage(
@@ -152,31 +152,39 @@ serve(async (req) => {
     // Always check system_config as fallback (even if env vars are set but empty)
     if (!replicateToken || !removeBgApiKey || !rodinApiKey) {
       console.log("Checking system_config table for missing API keys...");
+      console.log("Service key available:", supabaseServiceKey ? "YES" : "NO");
+      console.log("Supabase client created:", supabase ? "YES" : "NO");
+
       const { data: configs, error: configError } = await supabase
         .from("system_config")
         .select("key, value")
         .in("key", ["REPLICATE_API_TOKEN", "REMOVE_BG_API_KEY", "RODIN_API_KEY"]);
 
+      console.log("Query result - error:", configError);
+      console.log("Query result - data:", configs);
+      console.log("Query result - data length:", configs?.length);
+
       if (configError) {
-        console.error("Failed to read system_config:", configError);
-      } else if (configs) {
+        console.error("Failed to read system_config:", JSON.stringify(configError));
+      } else if (configs && configs.length > 0) {
         console.log(`Found ${configs.length} config entries in system_config`);
         for (const cfg of configs) {
+          console.log(`Processing config: key=${cfg.key}, value=${cfg.value ? 'HAS_VALUE' : 'NO_VALUE'}`);
           if (cfg.key === "REPLICATE_API_TOKEN" && !replicateToken) {
             replicateToken = cfg.value?.trim() || null;
-            console.log(`Loaded REPLICATE_API_TOKEN from system_config: ${replicateToken?.substring(0, 8)}...`);
+            console.log(`✅ Loaded REPLICATE_API_TOKEN from system_config: ${replicateToken?.substring(0, 8)}...`);
           }
           if (cfg.key === "REMOVE_BG_API_KEY" && !removeBgApiKey) {
             removeBgApiKey = cfg.value?.trim() || null;
-            console.log(`Loaded REMOVE_BG_API_KEY from system_config`);
+            console.log(`✅ Loaded REMOVE_BG_API_KEY from system_config`);
           }
           if (cfg.key === "RODIN_API_KEY" && !rodinApiKey) {
             rodinApiKey = cfg.value?.trim() || null;
-            console.log(`Loaded RODIN_API_KEY from system_config`);
+            console.log(`✅ Loaded RODIN_API_KEY from system_config`);
           }
         }
       } else {
-        console.warn("system_config query returned no data");
+        console.error("❌ system_config query returned no data or empty array");
       }
     }
 

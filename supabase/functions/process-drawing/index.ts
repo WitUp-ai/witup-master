@@ -138,23 +138,45 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Load API keys: prefer Deno env, fallback to system_config table
-    let replicateToken = Deno.env.get("REPLICATE_API_TOKEN") || null;
-    let removeBgApiKey = Deno.env.get("REMOVE_BG_API_KEY") || null;
-    let rodinApiKey = Deno.env.get("RODIN_API_KEY") || null;
+    // IMPORTANT: trim empty strings to treat them as null for proper fallback
+    let replicateToken = Deno.env.get("REPLICATE_API_TOKEN")?.trim() || null;
+    let removeBgApiKey = Deno.env.get("REMOVE_BG_API_KEY")?.trim() || null;
+    let rodinApiKey = Deno.env.get("RODIN_API_KEY")?.trim() || null;
 
+    console.log(`[${FUNCTION_VERSION}] Initial API keys from env:`, {
+      replicate: replicateToken ? `${replicateToken.substring(0, 8)}...` : "NULL",
+      removebg: removeBgApiKey ? "SET" : "NULL",
+      rodin: rodinApiKey ? "SET" : "NULL"
+    });
+
+    // Always check system_config as fallback (even if env vars are set but empty)
     if (!replicateToken || !removeBgApiKey || !rodinApiKey) {
-      console.log("Some API keys missing from env, checking system_config table...");
-      const { data: configs } = await supabase
+      console.log("Checking system_config table for missing API keys...");
+      const { data: configs, error: configError } = await supabase
         .from("system_config")
         .select("key, value")
         .in("key", ["REPLICATE_API_TOKEN", "REMOVE_BG_API_KEY", "RODIN_API_KEY"]);
 
-      if (configs) {
+      if (configError) {
+        console.error("Failed to read system_config:", configError);
+      } else if (configs) {
+        console.log(`Found ${configs.length} config entries in system_config`);
         for (const cfg of configs) {
-          if (cfg.key === "REPLICATE_API_TOKEN" && !replicateToken) replicateToken = cfg.value;
-          if (cfg.key === "REMOVE_BG_API_KEY" && !removeBgApiKey) removeBgApiKey = cfg.value;
-          if (cfg.key === "RODIN_API_KEY" && !rodinApiKey) rodinApiKey = cfg.value;
+          if (cfg.key === "REPLICATE_API_TOKEN" && !replicateToken) {
+            replicateToken = cfg.value?.trim() || null;
+            console.log(`Loaded REPLICATE_API_TOKEN from system_config: ${replicateToken?.substring(0, 8)}...`);
+          }
+          if (cfg.key === "REMOVE_BG_API_KEY" && !removeBgApiKey) {
+            removeBgApiKey = cfg.value?.trim() || null;
+            console.log(`Loaded REMOVE_BG_API_KEY from system_config`);
+          }
+          if (cfg.key === "RODIN_API_KEY" && !rodinApiKey) {
+            rodinApiKey = cfg.value?.trim() || null;
+            console.log(`Loaded RODIN_API_KEY from system_config`);
+          }
         }
+      } else {
+        console.warn("system_config query returned no data");
       }
     }
 
@@ -166,7 +188,11 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[${FUNCTION_VERSION}] API keys loaded. Replicate:`, replicateToken ? "OK" : "MISSING");
+    console.log(`[${FUNCTION_VERSION}] Final API keys status:`, {
+      replicate: replicateToken ? `${replicateToken.substring(0, 8)}...` : "MISSING",
+      removebg: removeBgApiKey ? "SET" : "MISSING (will skip)",
+      rodin: rodinApiKey ? "SET" : "MISSING (will skip)"
+    });
 
     // Load cost estimates from system_config
     const costVision = await getCostConfig(supabase, "COST_VISION_VALIDATION", 0.002);

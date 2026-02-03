@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
-const FUNCTION_VERSION = "2026-01-31-v7";
+const FUNCTION_VERSION = "2026-02-03-v8-token-fix";
 
 /** Log an AI operation to usage_logs for cost tracking */
 async function logUsage(
@@ -193,6 +193,13 @@ serve(async (req) => {
       removebg: removeBgApiKey ? "SET" : "MISSING (will skip)",
       rodin: rodinApiKey ? "SET" : "MISSING (will skip)"
     });
+
+    // CRITICAL: Log if token is missing to help debug
+    if (!replicateToken) {
+      console.error(`[${FUNCTION_VERSION}] ❌ CRITICAL: Replicate token is NULL - processing will be skipped!`);
+    } else {
+      console.log(`[${FUNCTION_VERSION}] ✅ Replicate token loaded successfully`);
+    }
 
     // Load cost estimates from system_config
     const costVision = await getCostConfig(supabase, "COST_VISION_VALIDATION", 0.002);

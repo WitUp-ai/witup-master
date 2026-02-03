@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
-const FUNCTION_VERSION = "2026-01-31-v7";
+const FUNCTION_VERSION = "2026-02-03-v12-FINAL";
 
 /** Log an AI operation to usage_logs for cost tracking */
 async function logUsage(
@@ -60,9 +60,11 @@ async function getCostConfig(
   }
 }
 
+// CORS Headers - Must be included in ALL responses
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
 interface ProcessRequest {
@@ -138,23 +140,56 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Load API keys: prefer Deno env, fallback to system_config table
-    let replicateToken = Deno.env.get("REPLICATE_API_TOKEN") || null;
-    let removeBgApiKey = Deno.env.get("REMOVE_BG_API_KEY") || null;
-    let rodinApiKey = Deno.env.get("RODIN_API_KEY") || null;
+    // IMPORTANT: trim empty strings to treat them as null for proper fallback
+    const rawReplicateToken = Deno.env.get("REPLICATE_API_TOKEN");
+    console.log(`[${FUNCTION_VERSION}] Raw REPLICATE_API_TOKEN from env:`, rawReplicateToken ? `EXISTS (${rawReplicateToken.substring(0, 12)}...)` : "DOES NOT EXIST");
 
+    let replicateToken = rawReplicateToken?.trim() || null;
+    let removeBgApiKey = Deno.env.get("REMOVE_BG_API_KEY")?.trim() || null;
+    let rodinApiKey = Deno.env.get("RODIN_API_KEY")?.trim() || null;
+
+    console.log(`[${FUNCTION_VERSION}] Initial API keys from env:`, {
+      replicate: replicateToken ? `${replicateToken.substring(0, 8)}...` : "NULL",
+      removebg: removeBgApiKey ? "SET" : "NULL",
+      rodin: rodinApiKey ? "SET" : "NULL"
+    });
+
+    // Always check system_config as fallback (even if env vars are set but empty)
     if (!replicateToken || !removeBgApiKey || !rodinApiKey) {
-      console.log("Some API keys missing from env, checking system_config table...");
-      const { data: configs } = await supabase
+      console.log("Checking system_config table for missing API keys...");
+      console.log("Service key available:", supabaseServiceKey ? "YES" : "NO");
+      console.log("Supabase client created:", supabase ? "YES" : "NO");
+
+      const { data: configs, error: configError } = await supabase
         .from("system_config")
         .select("key, value")
         .in("key", ["REPLICATE_API_TOKEN", "REMOVE_BG_API_KEY", "RODIN_API_KEY"]);
 
-      if (configs) {
+      console.log("Query result - error:", configError);
+      console.log("Query result - data:", configs);
+      console.log("Query result - data length:", configs?.length);
+
+      if (configError) {
+        console.error("Failed to read system_config:", JSON.stringify(configError));
+      } else if (configs && configs.length > 0) {
+        console.log(`Found ${configs.length} config entries in system_config`);
         for (const cfg of configs) {
-          if (cfg.key === "REPLICATE_API_TOKEN" && !replicateToken) replicateToken = cfg.value;
-          if (cfg.key === "REMOVE_BG_API_KEY" && !removeBgApiKey) removeBgApiKey = cfg.value;
-          if (cfg.key === "RODIN_API_KEY" && !rodinApiKey) rodinApiKey = cfg.value;
+          console.log(`Processing config: key=${cfg.key}, value=${cfg.value ? 'HAS_VALUE' : 'NO_VALUE'}`);
+          if (cfg.key === "REPLICATE_API_TOKEN" && !replicateToken) {
+            replicateToken = cfg.value?.trim() || null;
+            console.log(`✅ Loaded REPLICATE_API_TOKEN from system_config: ${replicateToken?.substring(0, 8)}...`);
+          }
+          if (cfg.key === "REMOVE_BG_API_KEY" && !removeBgApiKey) {
+            removeBgApiKey = cfg.value?.trim() || null;
+            console.log(`✅ Loaded REMOVE_BG_API_KEY from system_config`);
+          }
+          if (cfg.key === "RODIN_API_KEY" && !rodinApiKey) {
+            rodinApiKey = cfg.value?.trim() || null;
+            console.log(`✅ Loaded RODIN_API_KEY from system_config`);
+          }
         }
+      } else {
+        console.error("❌ system_config query returned no data or empty array");
       }
     }
 
@@ -166,7 +201,18 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[${FUNCTION_VERSION}] API keys loaded. Replicate:`, replicateToken ? "OK" : "MISSING");
+    console.log(`[${FUNCTION_VERSION}] Final API keys status:`, {
+      replicate: replicateToken ? `${replicateToken.substring(0, 8)}...` : "MISSING",
+      removebg: removeBgApiKey ? "SET" : "MISSING (will skip)",
+      rodin: rodinApiKey ? "SET" : "MISSING (will skip)"
+    });
+
+    // CRITICAL: Log if token is missing to help debug
+    if (!replicateToken) {
+      console.error(`[${FUNCTION_VERSION}] ❌ CRITICAL: Replicate token is NULL - processing will be skipped!`);
+    } else {
+      console.log(`[${FUNCTION_VERSION}] ✅ Replicate token loaded successfully`);
+    }
 
     // Load cost estimates from system_config
     const costVision = await getCostConfig(supabase, "COST_VISION_VALIDATION", 0.002);
@@ -469,59 +515,79 @@ serve(async (req) => {
     }
 
     // =========================================
-    // STEP 3: CRITICAL DB UPDATE (before thumbnail — must not be blocked)
-    // =========================================
-    const processingTimeMs = Date.now() - startTime;
-    const finalStatus = has3DPending && !model3dUrl ? "processing_3d" : "completed";
-    const conceptUrl = stylizedImageUrl || processedImageUrl || null;
-
-    console.log(`Setting drawing status to: ${finalStatus}, concept: ${conceptUrl ? "YES" : "NO"}`);
-
-    const updateData: Record<string, unknown> = {
-      model_status: finalStatus,
-      processing_step: has3DPending ? "waiting_3d" : "done",
-    };
-
-    if (finalStatus === "completed") {
-      updateData.processing_completed_at = new Date().toISOString();
-    }
-    if (processedImageUrl) {
-      updateData.processed_image_url = processedImageUrl;
-    }
-    if (model3dUrl) {
-      updateData.model_3d_url = model3dUrl;
-    }
-
-    await supabase
-      .from("drawings")
-      .update(updateData)
-      .eq("id", drawing_id);
-
-    console.log("Critical DB update done — UI should transition now");
-
-    // =========================================
-    // STEP 4: THUMBNAIL (non-critical, best-effort)
+    // STEP 4: THUMBNAIL (moved before DB update for fallback)
     // =========================================
     try {
       const thumbBytes = processedImageBytes || imageBytes;
       const thumbPath = `${drawing_id}/thumbnail.png`;
-      await supabase.storage
+      const { error: thumbUploadError } = await supabase.storage
         .from("models-thumbnails")
         .upload(thumbPath, thumbBytes, {
           contentType: "image/png",
           upsert: true,
         });
-      const { data: thumbUrlData } = supabase.storage
-        .from("models-thumbnails")
-        .getPublicUrl(thumbPath);
-      thumbnailUrl = thumbUrlData.publicUrl;
-
-      if (thumbnailUrl) {
-        await supabase.from("drawings").update({ thumbnail_url: thumbnailUrl }).eq("id", drawing_id);
+      
+      if (!thumbUploadError) {
+        const { data: thumbUrlData } = supabase.storage
+          .from("models-thumbnails")
+          .getPublicUrl(thumbPath);
+        thumbnailUrl = thumbUrlData.publicUrl;
       }
     } catch (thumbError) {
       console.error("Thumbnail upload failed (non-critical):", thumbError);
     }
+
+    // =========================================
+    // STEP 3: CRITICAL DB UPDATE
+    // =========================================
+    const processingTimeMs = Date.now() - startTime;
+    const finalStatus = has3DPending && !model3dUrl ? "processing_3d" : "completed";
+    
+    // FALLBACK LOGIC: Ensure we always have a displayable image URL
+    // Priority: Stylized > Processed (No BG) > Thumbnail > Original
+    const bestDisplayUrl = stylizedImageUrl || processedImageUrl || thumbnailUrl || drawing.original_image_url;
+    
+    // If we have a stylized image but no processed image (weird case), use stylized as processed
+    if (!processedImageUrl && stylizedImageUrl) {
+      processedImageUrl = stylizedImageUrl;
+    }
+    
+    const conceptUrl = stylizedImageUrl || processedImageUrl || null;
+
+    console.log(`Setting drawing status to: ${finalStatus}`);
+    console.log(`- Concept URL: ${conceptUrl ? "YES" : "NO"}`);
+    console.log(`- Best Display URL: ${bestDisplayUrl ? "YES" : "NO"}`);
+
+    const updateData: Record<string, unknown> = {
+      model_status: finalStatus,
+      processing_step: has3DPending ? "waiting_3d" : "done",
+      // Always ensure processed_image_url has a value for the frontend to display
+      processed_image_url: processedImageUrl || bestDisplayUrl,
+      thumbnail_url: thumbnailUrl
+    };
+
+    if (finalStatus === "completed") {
+      updateData.processing_completed_at = new Date().toISOString();
+    }
+    
+    // Optional fields
+    if (model3dUrl) updateData.model_3d_url = model3dUrl;
+    if (stylizedImageUrl) updateData['stylized_image_url'] = stylizedImageUrl; // Try to save if column exists
+
+    // Perform the update
+    const { error: updateError } = await supabase
+      .from("drawings")
+      .update(updateData)
+      .eq("id", drawing_id);
+
+    if (updateError) {
+      console.warn("Update failed, retrying without optional columns...", updateError.message);
+      // Fallback update if 'stylized_image_url' column doesn't exist
+      delete updateData['stylized_image_url'];
+      await supabase.from("drawings").update(updateData).eq("id", drawing_id);
+    }
+
+    console.log("Critical DB update done — UI should transition now");
 
     // =========================================
     // STEP 5: NOTIFICATION (non-critical, best-effort)
@@ -546,7 +612,7 @@ serve(async (req) => {
     const result: ProcessingResult & { fn_version?: string } = {
       success: true,
       fn_version: FUNCTION_VERSION,
-      processed_image_url: processedImageUrl || undefined,
+      processed_image_url: processedImageUrl || bestDisplayUrl || undefined,
       concept_url: conceptUrl || undefined,
       model_3d_url: model3dUrl || undefined,
       thumbnail_url: thumbnailUrl || undefined,

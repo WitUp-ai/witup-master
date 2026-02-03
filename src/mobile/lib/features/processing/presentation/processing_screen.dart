@@ -77,7 +77,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
     final s = _remainingSeconds;
     final min = s ~/ 60;
     final sec = s % 60;
-    return '${min}:${sec.toString().padLeft(2, '0')}';
+    return '$min:${sec.toString().padLeft(2, '0')}';
   }
 
   void _onStatusChanged(String? step) {
@@ -288,7 +288,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
 
                 // Timer
                 Text(
-                  showOvertime ? 'Ancora pochi istanti...' : 'Tempo stimato: ${_countdownText}',
+                  showOvertime ? 'Ancora pochi istanti...' : 'Tempo stimato: $_countdownText',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: showOvertime ? Colors.orange : AppTheme.primaryColor,
@@ -647,8 +647,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
 
           const SizedBox(height: AppTheme.spaceXL),
 
-          // Processed image preview
-          if (status.displayImageUrl != null) ...[
+          // Processed image preview - Use thumbnail as fallback if processed_image_url is null
+          if (status.displayImageUrl != null || status.thumbnailUrl != null) ...[
             const Text(
               'Il tuo disegno elaborato:',
               style: TextStyle(fontWeight: FontWeight.w500),
@@ -661,7 +661,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.network(
-                status.displayImageUrl!,
+                status.displayImageUrl ?? status.thumbnailUrl!,
                 height: 250,
                 fit: BoxFit.contain,
                 loadingBuilder: (context, child, progress) {

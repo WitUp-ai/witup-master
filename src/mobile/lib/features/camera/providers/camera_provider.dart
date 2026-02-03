@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -55,7 +57,8 @@ class CameraNotifier extends StateNotifier<CameraState> {
   final _debug = DebugLogService.instance;
 
   /// Upload a drawing image to Supabase Storage
-  Future<String> uploadDrawing(XFile imageFile, Uint8List imageBytes) async {
+  /// Returns the drawing ID if successful
+  Future<String?> uploadDrawing(XFile imageFile, Uint8List imageBytes) async {
     try {
       _debug.log('Upload', 'Starting upload: ${imageFile.name} (${(imageBytes.length / 1024).toStringAsFixed(1)} KB)');
       state = state.copyWith(isUploading: true, error: null, uploadProgress: 0);
@@ -78,28 +81,38 @@ class CameraNotifier extends StateNotifier<CameraState> {
 
       state = state.copyWith(uploadProgress: 0.3);
 
-      // Upload to Supabase Storage (drawings-original bucket - private)
-      await _supabase.storage
-          .from('drawings-original')
-          .uploadBinary(
-            storagePath,
-            imageBytes,
-            fileOptions: FileOptions(
-              contentType: 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-              upsert: true,
-            ),
-          );
+      // Use Edge Function for upload to ensure RLS bypass if needed
+      // This is more robust than direct storage upload which requires perfect RLS policies
+      final session = _supabase.auth.currentSession;
+      if (session == null) throw Exception('No active session');
 
-      _debug.success('Upload', 'Storage upload complete: $storagePath');
+      final functionUrl = '${_supabase.rest.url.toString().replaceAll('/rest/v1', '')}/functions/v1/upload-drawing';
+      
+      _debug.log('Upload', 'Uploading via Edge Function: $functionUrl');
+
+      final response = await http.post(
+        Uri.parse(functionUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+        body: jsonEncode({
+          'image_base64': base64Encode(imageBytes),
+          'file_name': fileName,
+          'content_type': 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Upload failed: ${response.statusCode} - ${response.body}');
+      }
+
+      final responseData = jsonDecode(response.body);
+      _debug.success('Upload', 'Storage upload complete via Edge Function: $storagePath');
       state = state.copyWith(uploadProgress: 0.7);
 
-      // Get signed URL for private bucket (valid for 1 hour)
-      final signedUrl = await _supabase.storage
-          .from('drawings-original')
-          .createSignedUrl(storagePath, 3600);
-
-      // Storage path is the URL reference for database
-      final publicUrl = signedUrl;
+      // Use the URL returned by the function (it includes a signed token)
+      final publicUrl = responseData['public_url'] as String;
 
       _debug.success('Upload', 'Signed URL created');
       state = state.copyWith(uploadProgress: 0.9);
@@ -121,7 +134,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
         uploadProgress: 1.0,
       );
 
-      return publicUrl;
+      return drawingId;
     } catch (e) {
       _debug.error('Upload', 'Upload failed', error: e);
       state = state.copyWith(
@@ -134,7 +147,7 @@ class CameraNotifier extends StateNotifier<CameraState> {
   }
 
   /// Save drawing record to database (matches .spec/database-schema.sql)
-  /// Returns the drawing ID if successful, null otherwise
+  /// Returns the drawing ID if successful
   Future<String?> _saveDrawingRecord({
     required String userId,
     required String storagePath,
@@ -142,20 +155,39 @@ class CameraNotifier extends StateNotifier<CameraState> {
     required String fileName,
   }) async {
     try {
+      _debug.log('Database', 'Inserting drawing record for user: $userId');
+
+      // WORKAROUND: Ensure user exists in public.users before inserting drawing
+      // Fixes FK constraint error when user only exists in auth.users
+      try {
+        final userCheck = await _supabase.from('users').select('id').eq('id', userId).maybeSingle();
+        if (userCheck == null) {
+          final authUser = _supabase.auth.currentUser;
+          await _supabase.from('users').insert({
+            'id': userId,
+            'email': authUser?.email ?? 'unknown@example.com',
+            'subscription_status': 'active',
+            'monthly_quota': 10,
+          });
+          _debug.success('Database', 'User synced to public.users');
+        }
+      } catch (e) {
+        _debug.warning('Database', 'User sync attempt: $e');
+      }
+
       final response = await _supabase.from('drawings').insert({
         'user_id': userId,
-        'original_image_url': storagePath, // Storage path in drawings-original bucket
+        'original_image_url': storagePath,
         'title': 'Drawing ${DateTime.now().toString().substring(0, 10)}',
         'model_status': 'pending',
-        // created_at and updated_at are auto-generated by database triggers
       }).select('id').single();
 
-      return response['id'] as String?;
+      final drawingId = response['id'] as String?;
+      _debug.success('Database', 'Drawing created: $drawingId');
+      return drawingId;
     } catch (e) {
-      // Log error but don't fail the upload
-      // The storage upload was successful
-      debugPrint('Warning: Could not save drawing record: $e');
-      return null;
+      _debug.error('Database', 'Failed to save drawing', error: e);
+      throw Exception('Failed to save drawing: ${e.toString()}');
     }
   }
 

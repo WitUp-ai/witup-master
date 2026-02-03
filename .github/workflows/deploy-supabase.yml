@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'supabase/functions/**'
+      - 'supabase/migrations/**'
 
 jobs:
   deploy:
@@ -15,6 +16,20 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Link Supabase Project
+        run: supabase link --project-ref $PROJECT_ID
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      - name: Set Edge Function Secrets
+        run: |
+          supabase secrets set REPLICATE_API_TOKEN="$REPLICATE_TOKEN" --project-ref $PROJECT_ID
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          REPLICATE_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
 
       - name: Deploy Edge Functions
         run: supabase functions deploy --project-ref $PROJECT_ID

@@ -92,46 +92,111 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Future<void> _confirmAndProcess() async {
-    if (_capturedImage == null || _imageBytes == null) return;
+    if (_capturedImage == null || _imageBytes == null) {
+      debugPrint('DEBUG: No image captured');
+      return;
+    }
 
+    debugPrint('DEBUG: Starting upload process...');
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      // Upload to provider for processing
-      await ref.read(cameraProvider.notifier).uploadDrawing(
+      debugPrint('DEBUG: Calling uploadDrawing...');
+
+      // Show starting dialog
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => const AlertDialog(
+          title: Text('DEBUG'),
+          content: Text('Starting upload...'),
+        ),
+      );
+
+      final drawingId = await ref.read(cameraProvider.notifier).uploadDrawing(
         _capturedImage!,
         _imageBytes!,
       );
 
-      // Get the drawing ID from the provider
-      final drawingId = ref.read(cameraProvider).lastDrawingId;
+      debugPrint('DEBUG: Upload completed, drawing ID: $drawingId');
 
-      if (mounted) {
-        if (drawingId != null) {
-          // Navigate to processing screen with the drawing ID
-          context.go('/processing/$drawingId');
-        } else {
-          // Fallback: show success and go home
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Drawing captured! Processing magic... ✨'),
-              backgroundColor: AppTheme.successColor,
+      if (!mounted) return;
+
+      // Close debug dialog
+      Navigator.of(context).pop();
+
+      // Show result dialog
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('DEBUG: Upload Result'),
+          content: Text('Drawing ID: $drawingId\nMounted: $mounted\nWill navigate: ${drawingId != null}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
             ),
-          );
-          context.go('/home');
-        }
-      }
-    } catch (e) {
-      if (mounted) {
+          ],
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (drawingId != null) {
+        debugPrint('DEBUG: About to navigate to /processing/$drawingId');
+
+        // Show navigation dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => const AlertDialog(
+            title: Text('DEBUG'),
+            content: Text('Navigating to processing...'),
+          ),
+        );
+
+        // Small delay to see the dialog
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (!mounted) return;
+
+        debugPrint('DEBUG: Executing context.go...');
+        context.go('/processing/$drawingId');
+        debugPrint('DEBUG: context.go executed');
+      } else {
+        debugPrint('DEBUG: No drawing ID - showing error');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Upload failed: ${e.toString()}'),
+          const SnackBar(
+            content: Text('ERROR: Drawing uploaded but no ID returned'),
             backgroundColor: AppTheme.errorColor,
+            duration: Duration(seconds: 5),
           ),
         );
       }
+    } catch (e) {
+      debugPrint('DEBUG: Upload ERROR: $e');
+      if (!mounted) return;
+
+      // Close any open dialogs
+      Navigator.of(context).popUntil((route) => route.isFirst);
+
+      // Show error dialog
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Upload Failed'),
+          content: Text('Error: ${e.toString()}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {

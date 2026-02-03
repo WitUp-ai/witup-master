@@ -11,5 +11,9 @@
   "description": "",
   "devDependencies": {
     "@anthropic-ai/claude-code": "^2.1.27"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.94.0",
+    "pg": "^8.18.0"
   }
 }

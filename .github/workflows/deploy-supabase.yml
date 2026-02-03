@@ -23,11 +23,13 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
 
-      - name: Deploy Database Migrations
-        run: supabase db push
+      - name: Set Edge Function Secrets
+        run: |
+          echo "$REPLICATE_TOKEN" | supabase secrets set REPLICATE_API_TOKEN --project-ref $PROJECT_ID
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          REPLICATE_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
 
       - name: Deploy Edge Functions
         run: supabase functions deploy --project-ref $PROJECT_ID

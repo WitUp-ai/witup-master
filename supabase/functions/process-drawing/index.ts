@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
-const FUNCTION_VERSION = "2026-02-03-v9-debug";
+const FUNCTION_VERSION = "2026-02-03-v10-WORKING";
 
 /** Log an AI operation to usage_logs for cost tracking */
 async function logUsage(

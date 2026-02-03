@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'supabase/functions/**'
+      - 'supabase/migrations/**'
 
 jobs:
   deploy:
@@ -15,6 +16,12 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Deploy Database Migrations
+        run: supabase db push --project-ref $PROJECT_ID
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
 
       - name: Deploy Edge Functions
         run: supabase functions deploy --project-ref $PROJECT_ID

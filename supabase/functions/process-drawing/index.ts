@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
-const FUNCTION_VERSION = "2026-02-03-v11-WITH-SECRETS";
+const FUNCTION_VERSION = "2026-02-03-v12-FINAL";
 
 /** Log an AI operation to usage_logs for cost tracking */
 async function logUsage(
@@ -139,7 +139,10 @@ serve(async (req) => {
 
     // Load API keys: prefer Deno env, fallback to system_config table
     // IMPORTANT: trim empty strings to treat them as null for proper fallback
-    let replicateToken = Deno.env.get("REPLICATE_API_TOKEN")?.trim() || null;
+    const rawReplicateToken = Deno.env.get("REPLICATE_API_TOKEN");
+    console.log(`[${FUNCTION_VERSION}] Raw REPLICATE_API_TOKEN from env:`, rawReplicateToken ? `EXISTS (${rawReplicateToken.substring(0, 12)}...)` : "DOES NOT EXIST");
+
+    let replicateToken = rawReplicateToken?.trim() || null;
     let removeBgApiKey = Deno.env.get("REMOVE_BG_API_KEY")?.trim() || null;
     let rodinApiKey = Deno.env.get("RODIN_API_KEY")?.trim() || null;
 
